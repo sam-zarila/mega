@@ -24,6 +24,7 @@ class Approvals extends AdminController
     public function index()
     {
         $this->require_core_approvals_roles();
+        $this->backfill_sent_proposals_to_approvals();
 
         $staffId = get_staff_user_id();
         $role    = get_staff_role($staffId);
@@ -40,6 +41,64 @@ class Approvals extends AdminController
         $data['is_general_manager']    = ($role === 'General Manager');
 
         $this->load->view('approvals/dashboard', $data);
+    }
+
+    /**
+     * Safety sync: ensure sent proposals are enqueued for approvals.
+     * Handles cases where proposal hooks were not triggered.
+     *
+     * @return void
+     */
+    protected function backfill_sent_proposals_to_approvals()
+    {
+        if (!$this->db->table_exists(db_prefix() . 'proposals')) {
+            return;
+        }
+
+        $cacheKey = 'approvals_proposal_backfill_last_run_' . get_staff_user_id();
+        $lastRun  = (int) $this->session->userdata($cacheKey);
+        if ($lastRun > 0 && (time() - $lastRun) < 60) {
+            return;
+        }
+        $this->session->set_userdata($cacheKey, time());
+
+        $p = db_prefix();
+        $sql = "SELECT p.id, p.total, p.addedfrom
+                FROM {$p}proposals p
+                LEFT JOIN {$p}ipms_approval_requests r
+                  ON r.document_type = 'quotation'
+                 AND r.document_id = p.id
+                WHERE p.status = 4
+                  AND r.id IS NULL
+                ORDER BY p.id DESC
+                LIMIT 100";
+        $rows = $this->db->query($sql)->result();
+        if (empty($rows)) {
+            return;
+        }
+
+        $this->load->model('proposals_model');
+        foreach ($rows as $row) {
+            $proposalId = (int) $row->id;
+            if ($proposalId < 1) {
+                continue;
+            }
+            $ref = function_exists('format_proposal_number')
+                ? format_proposal_number($proposalId)
+                : ('PRO-' . str_pad((string) $proposalId, 6, '0', STR_PAD_LEFT));
+            $submittedBy = (int) $row->addedfrom > 0 ? (int) $row->addedfrom : get_staff_user_id();
+            if ($submittedBy < 1) {
+                $submittedBy = get_staff_user_id();
+            }
+            $this->approvalservice->submit(
+                'quotation',
+                $proposalId,
+                $ref,
+                (float) $row->total,
+                $submittedBy,
+                'Auto-backfilled from sent proposal.'
+            );
+        }
     }
 
     public function view($id = '')
@@ -207,6 +266,94 @@ class Approvals extends AdminController
             'pending_badge_count' => $this->get_pending_nav_badge_count(get_staff_user_id()),
             'next_url'            => $fromDash ? '' : admin_url('approvals'),
         ]);
+    }
+
+    /**
+     * Non-AJAX fallback: approve directly via GET.
+     */
+    public function approve_direct($approval_request_id = 0)
+    {
+        $this->require_core_approvals_roles();
+        $approval_request_id = (int) $approval_request_id;
+        if ($approval_request_id < 1) {
+            set_alert('danger', _l('approval_error_missing_request_id'));
+            redirect(admin_url('approvals'));
+        }
+        $request = $this->approvals_model->get_request($approval_request_id);
+        if (!$request || !$this->can_access_request($request)) {
+            set_alert('danger', _l('approval_error_not_allowed'));
+            redirect(admin_url('approvals'));
+        }
+        $result = $this->approvalservice->approve($approval_request_id, get_staff_user_id(), 'Approved from dashboard');
+        if ($result === false) {
+            set_alert('danger', _l('approval_error_approve_failed'));
+        } elseif (is_array($result) && isset($result['status']) && $result['status'] === 'next_stage') {
+            set_alert('success', _l('approval_forwarded_gm'));
+        } else {
+            set_alert('success', _l('approval_document_approved'));
+        }
+        $this->session->unset_userdata('approvals_pending_count_' . get_staff_user_id());
+        redirect(admin_url('approvals'));
+    }
+
+    /**
+     * Non-AJAX fallback: reject directly via GET.
+     */
+    public function reject_direct($approval_request_id = 0)
+    {
+        $this->require_core_approvals_roles();
+        $approval_request_id = (int) $approval_request_id;
+        if ($approval_request_id < 1) {
+            set_alert('danger', _l('approval_error_missing_request_id'));
+            redirect(admin_url('approvals'));
+        }
+        $request = $this->approvals_model->get_request($approval_request_id);
+        if (!$request || !$this->can_access_request($request)) {
+            set_alert('danger', _l('approval_error_not_allowed'));
+            redirect(admin_url('approvals'));
+        }
+        $comments = trim((string) $this->input->get('comments'));
+        if (strlen($comments) < 10) {
+            $comments = 'Rejected by approver.';
+        }
+        $ok = $this->approvalservice->reject($approval_request_id, get_staff_user_id(), $comments);
+        if (!$ok) {
+            set_alert('danger', _l('approval_error_reject_failed'));
+        } else {
+            set_alert('success', _l('approval_document_rejected'));
+        }
+        $this->session->unset_userdata('approvals_pending_count_' . get_staff_user_id());
+        redirect(admin_url('approvals'));
+    }
+
+    /**
+     * Non-AJAX fallback: request revision directly via GET.
+     */
+    public function revision_direct($approval_request_id = 0)
+    {
+        $this->require_core_approvals_roles();
+        $approval_request_id = (int) $approval_request_id;
+        if ($approval_request_id < 1) {
+            set_alert('danger', _l('approval_error_missing_request_id'));
+            redirect(admin_url('approvals'));
+        }
+        $request = $this->approvals_model->get_request($approval_request_id);
+        if (!$request || !$this->can_access_request($request)) {
+            set_alert('danger', _l('approval_error_not_allowed'));
+            redirect(admin_url('approvals'));
+        }
+        $comments = trim((string) $this->input->get('comments'));
+        if (strlen($comments) < 10) {
+            $comments = 'Please revise and resubmit.';
+        }
+        $ok = $this->approvalservice->request_revision($approval_request_id, get_staff_user_id(), $comments);
+        if (!$ok) {
+            set_alert('danger', _l('approval_error_revision_failed'));
+        } else {
+            set_alert('success', _l('approval_revision_requested'));
+        }
+        $this->session->unset_userdata('approvals_pending_count_' . get_staff_user_id());
+        redirect(admin_url('approvals'));
     }
 
     public function settings()
@@ -403,7 +550,15 @@ class Approvals extends AdminController
         switch ($request->document_type) {
             case 'quotation':
                 $this->load->model('estimates_model');
-                return $this->estimates_model->get($id);
+                $estimate = $this->estimates_model->get($id);
+                if ($estimate) {
+                    return $estimate;
+                }
+                if ($this->db->table_exists($p . 'proposals')) {
+                    $this->load->model('proposals_model');
+                    return $this->proposals_model->get($id);
+                }
+                return null;
 
             case 'credit_note':
                 $this->load->model('credit_notes_model');
@@ -442,7 +597,11 @@ class Approvals extends AdminController
     protected function load_document_items_for_request($request)
     {
         if ($request->document_type === 'quotation' && function_exists('get_items_by_type')) {
-            return get_items_by_type('estimate', (int) $request->document_id);
+            $items = get_items_by_type('estimate', (int) $request->document_id);
+            if (!empty($items)) {
+                return $items;
+            }
+            return get_items_by_type('proposal', (int) $request->document_id);
         }
         if ($request->document_type === 'credit_note' && function_exists('get_items_by_type')) {
             return get_items_by_type('credit_note', (int) $request->document_id);

@@ -222,6 +222,7 @@ class ApprovalService
         $this->log_action($approval_request_id, $actor_id, 'approved', (string) $comments, $stage);
 
         $this->notify_submitter($approval_request_id, 'approved', (string) $comments, $actor_id);
+        $this->notify_customer($req, 'approved', (string) $comments, $actor_id);
 
         $this->on_document_approved($req->document_type, (int) $req->document_id);
 
@@ -254,6 +255,7 @@ class ApprovalService
         $this->log_action($approval_request_id, $actor_id, 'rejected', $comments, (int) $req->approval_stage);
 
         $this->notify_submitter($approval_request_id, 'rejected', $comments, $actor_id);
+        $this->notify_customer($req, 'rejected', $comments, $actor_id);
 
         $this->on_document_rejected($req->document_type, (int) $req->document_id, $comments);
 
@@ -286,6 +288,7 @@ class ApprovalService
         $this->log_action($approval_request_id, $actor_id, 'revision_requested', $comments, (int) $req->approval_stage);
 
         $this->notify_submitter($approval_request_id, 'revision_requested', $comments, $actor_id);
+        $this->notify_customer($req, 'revision_requested', $comments, $actor_id);
 
         return true;
     }
@@ -405,6 +408,126 @@ class ApprovalService
                 log_message('error', 'ApprovalService::notify_submitter email: ' . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Notify customer/contact for final decision events.
+     *
+     * @param object $req Approval request row
+     * @param string $decision approved|rejected|revision_requested
+     * @param string $comments
+     * @param int|null $approver_staff_id
+     */
+    public function notify_customer($req, $decision, $comments = '', $approver_staff_id = null)
+    {
+        if (!$req || !is_object($req)) {
+            return;
+        }
+
+        $targets = $this->get_customer_targets_for_request($req);
+        if (empty($targets['emails'])) {
+            return;
+        }
+
+        $ref      = $req->document_ref ? $req->document_ref : ('#' . $req->document_id);
+        $dtype    = $this->format_document_type($req->document_type);
+        $approver = $approver_staff_id ? get_staff_full_name((int) $approver_staff_id) : get_staff_full_name((int) get_staff_user_id());
+        $decisionLabel = ucwords(str_replace('_', ' ', (string) $decision));
+        $subject = $this->build_customer_decision_subject($decision, $ref);
+
+        $body  = '<p>Dear ' . e($targets['name'] !== '' ? $targets['name'] : 'Customer') . ',</p>';
+        $body .= '<p>Your ' . e($dtype) . ' <strong>' . e($ref) . '</strong> has been <strong>' . e($decisionLabel) . '</strong>.</p>';
+        if ($approver !== '') {
+            $body .= '<p><strong>Reviewed by:</strong> ' . e($approver) . '</p>';
+        }
+        if ($comments !== '') {
+            $body .= '<p><strong>Comments:</strong><br />' . nl2br(e($comments)) . '</p>';
+        }
+        $body .= '<p>Regards,<br />' . e(get_option('companyname')) . '</p>';
+
+        $this->CI->load->model('emails_model');
+        foreach ($targets['emails'] as $email) {
+            try {
+                $this->CI->emails_model->send_simple_email($email, $subject, $body);
+            } catch (Throwable $e) {
+                log_message('error', 'ApprovalService::notify_customer email: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * @param object $req
+     * @return array{emails:array<int,string>,name:string}
+     */
+    protected function get_customer_targets_for_request($req)
+    {
+        $emails = [];
+        $name   = '';
+
+        // Quotations can originate from either proposals or estimates.
+        if ($req->document_type === 'quotation') {
+            if ($this->CI->db->table_exists(db_prefix() . 'proposals')) {
+                $this->CI->load->model('proposals_model');
+                $proposal = $this->CI->proposals_model->get((int) $req->document_id);
+                if ($proposal) {
+                    $relType = isset($proposal->rel_type) ? (string) $proposal->rel_type : '';
+                    $relId   = isset($proposal->rel_id) ? (int) $proposal->rel_id : 0;
+                    if ($relType !== '' && $relId > 0) {
+                        $rel = $this->CI->proposals_model->get_relation_data_values($relId, $relType);
+                        if ($rel) {
+                            if (!empty($rel->email)) {
+                                $emails[] = (string) $rel->email;
+                            }
+                            if (!empty($rel->name)) {
+                                $name = (string) $rel->name;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (empty($emails)) {
+                $this->CI->load->model('estimates_model');
+                $estimate = $this->CI->estimates_model->get((int) $req->document_id);
+                if ($estimate && !empty($estimate->clientid)) {
+                    $primaryId = function_exists('get_primary_contact_user_id')
+                        ? (int) get_primary_contact_user_id((int) $estimate->clientid)
+                        : 0;
+                    if ($primaryId > 0) {
+                        $this->CI->db->select('email, firstname, lastname');
+                        $this->CI->db->where('id', $primaryId);
+                        $contact = $this->CI->db->get(db_prefix() . 'contacts')->row();
+                        if ($contact && !empty($contact->email)) {
+                            $emails[] = (string) $contact->email;
+                            $name = trim(((string) ($contact->firstname ?? '')) . ' ' . ((string) ($contact->lastname ?? '')));
+                        }
+                    }
+                }
+            }
+        }
+
+        $emails = array_values(array_unique(array_filter(array_map('trim', $emails))));
+
+        return ['emails' => $emails, 'name' => $name];
+    }
+
+    protected function build_customer_decision_subject($decision, $documentRef)
+    {
+        $ref = (string) $documentRef;
+        $keyMap = [
+            'approved'           => 'approvals_email_subject_approved',
+            'rejected'           => 'approvals_email_subject_rejected',
+            'revision_requested' => 'approvals_email_subject_revision',
+        ];
+        $key = isset($keyMap[$decision]) ? $keyMap[$decision] : '';
+        if ($key !== '') {
+            $tpl = _l($key);
+            if (is_string($tpl) && $tpl !== '' && $tpl !== $key) {
+                return str_replace('{document_ref}', $ref, $tpl);
+            }
+        }
+
+        return 'Approval update: ' . $ref;
     }
 
     public function on_document_approved($document_type, $document_id)

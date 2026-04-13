@@ -638,14 +638,44 @@ $journal_balanced = count($journal_lines) > 0 && abs($journal_debit_sum - $journ
     ); ?>;
 
     function updateCsrf(hash) { if (hash) { csrfHash = hash; } }
+    function notify(type, msg) {
+        if (typeof alert_float === 'function') {
+            alert_float(type, msg);
+            return;
+        }
+        window.alert(msg);
+    }
 
     var $modal = $('#approvalActionModal');
     var $comments = $('#approval-modal-comments');
     var $submit = $('#approval-modal-submit');
     var $header = $('#approval-modal-header');
     var $title = $('#approval-modal-title');
+    var fallbackBusy = false;
 
-    $('.approval-view-open-modal').on('click', function() {
+    function postApprovalAction(id, action, comments, doneCb) {
+        var url = admin_url + 'approvals/';
+        if (action === 'approve') url += 'approve';
+        else if (action === 'reject') url += 'reject';
+        else url += 'request_revision';
+
+        var payload = {
+            approval_request_id: id,
+            comments: comments || ''
+        };
+        payload[csrfName] = csrfHash;
+
+        $.post(url, payload, null, 'json').done(function(res) {
+            if (res.csrf_token && res.csrf_token_name) {
+                updateCsrf(res[res.csrf_token_name] || res.csrf_token);
+            }
+            if (doneCb) doneCb(res);
+        }).fail(function() {
+            if (doneCb) doneCb({ success: false, message: 'Request failed' });
+        });
+    }
+
+    $(document).on('click', '.approval-view-open-modal', function() {
         var action = $(this).data('action');
         $('#approval-modal-request-id').val('<?= (int) $request->id; ?>');
         $('#approval-modal-action-type').val(action);
@@ -674,7 +704,31 @@ $journal_balanced = count($journal_lines) > 0 && abs($journal_debit_sum - $journ
             $('#approval-modal-comments-required').show();
             $('#approval-modal-min-hint').show();
         }
-        $modal.modal('show');
+        try {
+            $modal.modal('show');
+        } catch (e) {
+            var c = '';
+            if (action === 'reject' || action === 'revision') {
+                c = window.prompt('<?= e(_l('approval_modal_comments')); ?>', '') || '';
+                if (c.trim().length < 10) {
+                    notify('warning', '<?= e(_l('approval_error_comments_min_length')); ?>');
+                    return;
+                }
+            } else if (!window.confirm('<?= e(_l('approval_modal_title_approve')); ?>?')) {
+                return;
+            }
+            if (fallbackBusy) return;
+            fallbackBusy = true;
+            postApprovalAction(<?= (int) $request->id; ?>, action, c, function(res) {
+                fallbackBusy = false;
+                if (res && res.success) {
+                    notify('success', res.message || 'Done');
+                    window.location.reload();
+                } else {
+                    notify('danger', (res && res.message) ? res.message : 'Action failed');
+                }
+            });
+        }
     });
 
     $submit.on('click', function() {
@@ -683,32 +737,14 @@ $journal_balanced = count($journal_lines) > 0 && abs($journal_debit_sum - $journ
         var text = ($comments.val() || '').trim();
         if (action === 'reject' || action === 'revision') {
             if (text.length < 10) {
-                if (typeof alert_float === 'function') {
-                    alert_float('warning', '<?= e(_l('approval_error_comments_min_length')); ?>');
-                }
+                notify('warning', '<?= e(_l('approval_error_comments_min_length')); ?>');
                 return;
             }
         }
-        var url = admin_url + 'approvals/';
-        if (action === 'approve') url += 'approve';
-        else if (action === 'reject') url += 'reject';
-        else url += 'request_revision';
-
-        var payload = {
-            approval_request_id: id,
-            comments: $comments.val()
-        };
-        payload[csrfName] = csrfHash;
-
         $submit.prop('disabled', true);
-        $.post(url, payload, null, 'json').done(function(res) {
-            if (res.csrf_token && res.csrf_token_name) {
-                updateCsrf(res[res.csrf_token_name] || res.csrf_token);
-            }
+        postApprovalAction(id, action, $comments.val(), function(res) {
             if (res.success) {
-                if (typeof alert_float === 'function') {
-                    alert_float('success', res.message);
-                }
+                notify('success', res.message);
                 if (typeof res.pending_badge_count !== 'undefined') {
                     var $li = $('.menu-item-ipms-approvals');
                     var $badge = $li.find('.badge');
@@ -727,15 +763,8 @@ $journal_balanced = count($journal_lines) > 0 && abs($journal_debit_sum - $journ
                     window.location.reload();
                 }
             } else {
-                if (typeof alert_float === 'function') {
-                    alert_float('danger', res.message);
-                }
+                notify('danger', res.message || 'Action failed');
             }
-        }).fail(function() {
-            if (typeof alert_float === 'function') {
-                alert_float('danger', 'Request failed');
-            }
-        }).always(function() {
             $submit.prop('disabled', false);
         });
     });
