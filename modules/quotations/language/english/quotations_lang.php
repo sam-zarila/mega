@@ -1,0 +1,44 @@
+<?php
+
+defined('BASEPATH') or exit('No direct script access allowed');
+
+$lang['quotations_module_name']              = 'Quotations';
+$lang['quotations_new']                      = 'New Quotation';
+$lang['quotations_list']                    = 'All Quotations';
+$lang['quotations_builder']                 = 'Quotation Builder';
+$lang['quotations_ref']                     = 'Reference';
+$lang['quotations_version']                 = 'Version';
+$lang['quotations_client']                  = 'Client';
+$lang['quotations_grand_total']             = 'Grand Total';
+$lang['quotations_status']                  = 'Status';
+$lang['quotations_prepared_by']             = 'Prepared By';
+$lang['quotations_valid_until']             = 'Valid Until';
+$lang['quotations_submit_for_approval']     = 'Submit for Approval';
+$lang['quotations_create_revision']         = 'Create Revision';
+$lang['quotations_download_pdf']            = 'Download PDF';
+$lang['quotations_send_to_client']          = 'Send to Client';
+$lang['quotations_convert_to_job']          = 'Convert to Job';
+$lang['quotations_tab_signage']             = 'Signage & Printing';
+$lang['quotations_tab_installation']        = 'Installation';
+$lang['quotations_tab_construction']        = 'Construction Works';
+$lang['quotations_tab_retrofitting']        = 'Shop Retrofitting';
+$lang['quotations_tab_promotional']         = 'Promotional Items';
+$lang['quotations_tab_additional']          = 'Additional Charges';
+$lang['quotations_cost_price']              = 'Cost Price';
+$lang['quotations_sell_price']              = 'Sell Price';
+$lang['quotations_markup']                  = 'Markup %';
+$lang['quotations_margin']                  = 'Gross Margin';
+$lang['quotations_vat']                     = 'VAT (16.5%)';
+$lang['quotations_subtotal']                = 'Subtotal';
+$lang['quotations_discount']                = 'Discount';
+$lang['quotations_contingency']             = 'Contingency';
+$lang['quotations_draft_saved']             = 'Draft saved successfully';
+$lang['quotations_submitted']               = 'Quotation submitted for approval';
+$lang['quotations_revision_created']        = 'Revision created successfully';
+$lang['quotations_peer_restricted']         = 'You do not have permission to view this quotation';
+$lang['quotations_cannot_edit_submitted']   = 'Cannot edit a submitted quotation. Create a revision.';
+$lang['quotations_discount_warning']        = 'Discount above approval threshold';
+$lang['quotations_no_items']                = 'No line items added yet';
+$lang['quotations_revision_notes_placeholder'] = 'Explain what changes were made in this revision...';
+$lang['quotations_email_subject']           = 'Quotation {ref} from MW';
+$lang['quotations_email_sent']              = 'Quotation emailed to client successfully';

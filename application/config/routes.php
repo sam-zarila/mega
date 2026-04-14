@@ -184,6 +184,12 @@ $route['authentication/set_password/(:num)/(:num)/(:any)'] = 'admin/authenticati
 // For backward compatilibilty
 $route['survey/(:num)/(:any)'] = 'surveys/participate/index/$1/$2';
 
+// IPMS Quotations (admin URLs; module config/routes.php is not auto-loaded when URI starts with admin/)
+$qtModuleRoutes = APP_MODULES_PATH . 'quotations/config/routes.php';
+if (file_exists($qtModuleRoutes)) {
+    include $qtModuleRoutes;
+}
+
 if (file_exists(APPPATH . 'config/my_routes.php')) {
     include_once(APPPATH . 'config/my_routes.php');
 }
