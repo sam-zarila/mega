@@ -142,6 +142,23 @@ function qt_inject_footer_assets()
 
 function qt_on_proposal_create($hook_data)
 {
+    if (isset($hook_data['data']) && is_array($hook_data['data'])) {
+        $qtFields = [
+            'qt_worksheet',
+            'qt_proposal_id',
+            'qt_grand_total',
+            'qt_discount_percent',
+            'qt_discount_total',
+            'qt_subtotal',
+            'qt_contingency',
+            'qt_discount',
+            'qt_ref_display',
+        ];
+        foreach ($qtFields as $field) {
+            unset($hook_data['data'][$field]);
+        }
+    }
+
     $CI = &get_instance();
     $CI->session->set_userdata('qt_pending_init', 1);
 
@@ -152,6 +169,23 @@ function qt_on_proposal_update($hook_data, $proposal_id)
 {
     $CI          = &get_instance();
     $qtWorksheet = $CI->input->post('qt_worksheet');
+
+    if (isset($hook_data['data']) && is_array($hook_data['data'])) {
+        $qtFields = [
+            'qt_worksheet',
+            'qt_proposal_id',
+            'qt_grand_total',
+            'qt_discount_percent',
+            'qt_discount_total',
+            'qt_subtotal',
+            'qt_contingency',
+            'qt_discount',
+            'qt_ref_display',
+        ];
+        foreach ($qtFields as $field) {
+            unset($hook_data['data'][$field]);
+        }
+    }
 
     if (!empty($qtWorksheet)) {
         qt_sync_worksheet_to_proposal($proposal_id, $_POST);
