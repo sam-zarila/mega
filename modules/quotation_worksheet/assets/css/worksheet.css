@@ -1,0 +1,69 @@
+/* Quotation worksheet — Perfex/Bootstrap 3 */
+#qt-worksheet-panel {
+  margin-top: 15px;
+  border-color: #d8d8d8;
+}
+
+#qt-worksheet-panel .panel-heading {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.qt-worksheet-panel .qt-tabs {
+  margin-top: 15px;
+  border-bottom: 1px solid #ddd;
+}
+
+.qt-worksheet-panel .qt-tab-content {
+  padding: 15px 0;
+}
+
+.qt-lines-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #555;
+  white-space: nowrap;
+}
+
+.qt-lines-table .form-control.input-sm {
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.qt-drag-handle {
+  cursor: move;
+  color: #999;
+}
+
+.qt-boq-heading {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.qt-totals-table th,
+.qt-totals-table td {
+  border: none !important;
+}
+
+.qt-grand-row th {
+  border-top: 2px solid #ddd !important;
+  padding-top: 10px !important;
+}
+
+.qt-draft-warning {
+  margin-bottom: 15px;
+}
+
+.qt-actions .btn {
+  margin-right: 8px;
+}
+
+.ui-sortable-helper {
+  display: table;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}

@@ -37,7 +37,6 @@ class Quotations_model extends App_Model
      */
     public function get($id = '', $where = [])
     {
-        $this->db->from($this->table . ' q');
         $this->db->where('(' . qt_peer_visibility_where() . ')', null, false);
         if (is_array($where) && $where !== []) {
             $this->db->where($where);
@@ -45,10 +44,10 @@ class Quotations_model extends App_Model
         if ($id !== '' && $id !== null) {
             $this->db->where('q.id', (int) $id);
 
-            return $this->db->get()->row();
+            return $this->db->get($this->table . ' q')->row();
         }
 
-        return $this->db->get()->result_array();
+        return $this->db->get($this->table . ' q')->result_array();
     }
 
     /**
@@ -118,7 +117,19 @@ class Quotations_model extends App_Model
         }
 
         $base = $this->currencies_model->get_base_currency();
-        $currencyId = !empty($client->default_currency) ? (int) $client->default_currency : (int) $base->id;
+        if (!empty($client->default_currency)) {
+            $currencyId = (int) $client->default_currency;
+        } elseif ($base && isset($base->id)) {
+            $currencyId = (int) $base->id;
+        } else {
+            $fallback = $this->db->select('id')->order_by('id', 'ASC')->get(db_prefix() . 'currencies', 1)->row();
+            if (!$fallback || !isset($fallback->id)) {
+                log_message('error', 'Quotations_model::create failed: no currency configured.');
+
+                return false;
+            }
+            $currencyId = (int) $fallback->id;
+        }
 
         $terms = isset($data['terms']) && $data['terms'] !== ''
             ? $data['terms']

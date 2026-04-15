@@ -100,46 +100,52 @@ class Quotations extends AdminController
 
     public function edit($id = '')
     {
-        if (!$this->quotations_user_has_module_access()) {
-            access_denied('estimates');
+        try {
+            if (!$this->quotations_user_has_module_access()) {
+                access_denied('estimates');
+            }
+
+            $id = (int) $id;
+            if ($id < 1) {
+                show_404();
+            }
+
+            if (!qt_can_view_quotation($id)) {
+                set_alert('danger', _l('access_denied'));
+                redirect(admin_url('quotations'));
+            }
+
+            $this->load->model('clients_model');
+            $quotation = $this->quotations_model->get($id);
+            if (!$quotation) {
+                show_404();
+            }
+
+            $this->load->model('estimates_model');
+            $data['title']            = 'Edit quotation';
+            $data['edit']             = true;
+            $data['lines_locked']     = ($quotation->status !== 'draft');
+            $data['quotation']        = $quotation;
+            $data['estimate']         = $this->estimates_model->get((int) $quotation->estimate_id);
+            $data['lines_by_tab']     = $this->quotations_model->get_lines_grouped_by_tab($id);
+            $data['client']           = $this->clients_model->get((int) $quotation->client_id);
+            $data['promotional_inventory'] = $this->quotations_model->get_promotional_inventory_items();
+            $data['default_markup']   = qt_setting('qt_default_markup');
+            $data['default_contingency'] = qt_setting('qt_default_contingency');
+            $data['default_validity_days'] = qt_setting('qt_default_validity_days');
+            $data['default_terms']    = qt_setting('qt_terms_and_conditions');
+            $data['version_history']  = $this->quotations_model->get_version_history_by_ref($quotation->quotation_ref);
+            $data['client_primary_email'] = $this->quotations_primary_contact_email((int) $quotation->client_id);
+            $data['qt_discount_threshold'] = (float) (qt_setting('qt_discount_requires_approval_above') ?: 10);
+            $data['qt_vat_rate']      = qt_get_vat_rate();
+            $data['full_totals']      = $this->quotations_model->get_full_totals_payload($id);
+
+            $this->load->view('quotations/builder', $data);
+        } catch (Throwable $e) {
+            $lastQuery = method_exists($this->db, 'last_query') ? (string) $this->db->last_query() : '';
+            log_message('error', 'Quotations edit failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . ' | SQL: ' . $lastQuery);
+            show_error('Quotations edit failed: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine() . ($lastQuery !== '' ? ' | SQL: ' . $lastQuery : ''), 500, 'Quotations Error');
         }
-
-        $id = (int) $id;
-        if ($id < 1) {
-            show_404();
-        }
-
-        if (!qt_can_view_quotation($id)) {
-            set_alert('danger', _l('access_denied'));
-            redirect(admin_url('quotations'));
-        }
-
-        $this->load->model('clients_model');
-        $quotation = $this->quotations_model->get($id);
-        if (!$quotation) {
-            show_404();
-        }
-
-        $this->load->model('estimates_model');
-        $data['title']            = 'Edit quotation';
-        $data['edit']             = true;
-        $data['lines_locked']     = ($quotation->status !== 'draft');
-        $data['quotation']        = $quotation;
-        $data['estimate']         = $this->estimates_model->get((int) $quotation->estimate_id);
-        $data['lines_by_tab']     = $this->quotations_model->get_lines_grouped_by_tab($id);
-        $data['client']           = $this->clients_model->get((int) $quotation->client_id);
-        $data['promotional_inventory'] = $this->quotations_model->get_promotional_inventory_items();
-        $data['default_markup']   = qt_setting('qt_default_markup');
-        $data['default_contingency'] = qt_setting('qt_default_contingency');
-        $data['default_validity_days'] = qt_setting('qt_default_validity_days');
-        $data['default_terms']    = qt_setting('qt_terms_and_conditions');
-        $data['version_history']  = $this->quotations_model->get_version_history_by_ref($quotation->quotation_ref);
-        $data['client_primary_email'] = $this->quotations_primary_contact_email((int) $quotation->client_id);
-        $data['qt_discount_threshold'] = (float) (qt_setting('qt_discount_requires_approval_above') ?: 10);
-        $data['qt_vat_rate']      = qt_get_vat_rate();
-        $data['full_totals']      = $this->quotations_model->get_full_totals_payload($id);
-
-        $this->load->view('quotations/builder', $data);
     }
 
     public function save_line()
@@ -265,50 +271,55 @@ class Quotations extends AdminController
 
     public function ajax_create()
     {
-        // Do not require is_ajax_request(): some stacks strip X-Requested-With; jQuery still POSTs JSON.
-        if (strtoupper((string) $this->input->server('REQUEST_METHOD')) !== 'POST') {
-            show_404();
+        try {
+            // Do not require is_ajax_request(): some stacks strip X-Requested-With; jQuery still POSTs JSON.
+            if (strtoupper((string) $this->input->server('REQUEST_METHOD')) !== 'POST') {
+                show_404();
+            }
+
+            if (staff_cant('create', 'estimates')) {
+                echo json_encode(['success' => false, 'message' => _l('access_denied')]);
+
+                return;
+            }
+
+            if (!$this->quotations_user_has_module_access()) {
+                echo json_encode(['success' => false, 'message' => _l('access_denied')]);
+
+                return;
+            }
+
+            $clientId = (int) $this->input->post('client_id');
+            if ($clientId < 1) {
+                echo json_encode(['success' => false, 'message' => 'Client is required']);
+
+                return;
+            }
+
+            $id = $this->quotations_model->create([
+                'client_id'       => $clientId,
+                'internal_notes'  => $this->input->post('internal_notes'),
+                'service_type'    => $this->input->post('service_type') ?: 'signage',
+            ]);
+            if (!$id) {
+                echo json_encode(['success' => false, 'message' => 'Could not create quotation']);
+
+                return;
+            }
+
+            echo json_encode([
+                'success'        => true,
+                'quotation_id'   => (int) $id,
+                'quotation_ref'  => '',
+                'redirect'       => admin_url('quotations/edit/' . $id),
+            ]);
+        } catch (Throwable $e) {
+            log_message('error', 'Quotations ajax_create failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+            echo json_encode([
+                'success' => false,
+                'message' => 'Server error while creating quotation: ' . $e->getMessage(),
+            ]);
         }
-
-        if (staff_cant('create', 'estimates')) {
-            echo json_encode(['success' => false, 'message' => _l('access_denied')]);
-
-            return;
-        }
-
-        if (!$this->quotations_user_has_module_access()) {
-            echo json_encode(['success' => false, 'message' => _l('access_denied')]);
-
-            return;
-        }
-
-        $clientId = (int) $this->input->post('client_id');
-        if ($clientId < 1) {
-            echo json_encode(['success' => false, 'message' => 'Client is required']);
-
-            return;
-        }
-
-        $id = $this->quotations_model->create([
-            'client_id'       => $clientId,
-            'internal_notes'  => $this->input->post('internal_notes'),
-            'service_type'    => $this->input->post('service_type') ?: 'signage',
-        ]);
-
-        if (!$id) {
-            echo json_encode(['success' => false, 'message' => 'Could not create quotation']);
-
-            return;
-        }
-
-        $q = $this->quotations_model->get($id);
-
-        echo json_encode([
-            'success'        => true,
-            'quotation_id'   => (int) $id,
-            'quotation_ref'  => $q ? $q->quotation_ref : '',
-            'redirect'       => admin_url('quotations/edit/' . $id),
-        ]);
     }
 
     public function save_line_order()
