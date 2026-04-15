@@ -2439,6 +2439,8 @@ $(function () {
     calculate_total();
 
     $("body").find("#items-warning").remove();
+    var isProposalForm =
+      $(this).is("#proposal-form") || $(this).hasClass("proposal-form");
     var hasQtWorksheet = $(this).find('input[name="qt_worksheet"]').length > 0;
     var hasQtWorksheetRows =
       $(this).find("#qt-worksheet-panel .qt-lines-tbody tr.qt-line-row").length > 0;
@@ -2465,6 +2467,7 @@ $(function () {
       if (
         $itemsTable.length &&
         $itemsTable.find(".item").length === 0 &&
+        !isProposalForm &&
         !(hasQtWorksheet && hasQtWorksheetRows)
       ) {
         $itemsTable.before(
