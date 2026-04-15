@@ -16,8 +16,8 @@ $status_label  = qt_get_status_badge($worksheet);
   </div>
   <div class="panel-body">
     <?php if ($proposal_id < 1) : ?>
-      <div class="alert alert-warning qt-draft-warning">
-        <?php echo _l('qt_save_proposal_first'); ?>
+      <div class="alert alert-info qt-draft-warning">
+        You can start typing worksheet lines now. Save proposal to persist worksheet lines and totals.
       </div>
     <?php endif; ?>
 

@@ -255,6 +255,65 @@ function qt_default_add_payload(tab, section) {
   return base;
 }
 
+function qt_build_local_draft_row(tab, section) {
+  var sectionAttr = section || '';
+  var defaultMarkup = qt_config && qt_config.default_markup ? qt_config.default_markup : 25;
+  var h = '';
+  h += '<tr class="qt-line-row qt-local-draft" data-line-id="0" data-tab="' + tab + '" data-section="' + sectionAttr + '">';
+  h += '<td><i class="fa fa-bars qt-drag-handle"></i></td>';
+
+  if (tab === 'signage') {
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-description" data-field="description" value=""></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="substrate" value=""></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="print_type" value=""></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-width-field" data-field="width_m" value="0"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-height-field" data-field="height_m" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-area-field" data-field="computed_area" readonly value="0.00"></td>';
+    h += '<td><input type="number" step="1" min="1" class="form-control input-sm qt-field qt-qty-field" data-field="quantity" value="1"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-cost-field" data-field="cost_price" value="0"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-markup-field" data-field="markup_percent" value="' + defaultMarkup + '"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-sell-field" data-field="sell_price" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-line-total-field" data-field="line_total_sell" readonly value="0.00"></td>';
+  } else if (tab === 'installation') {
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-description" data-field="description" value=""></td>';
+    h += '<td><select class="form-control input-sm qt-field" data-field="activity_type"><option value="Labour" selected>Labour</option><option value="Travel">Travel</option><option value="Equipment">Equipment</option><option value="Lump Sum">Lump Sum</option></select></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-qty-field" data-field="quantity" value="1"></td>';
+    h += '<td><select class="form-control input-sm qt-field" data-field="rate_type"><option value="per Hour" selected>per Hour</option><option value="per Day">per Day</option><option value="Lump Sum">Lump Sum</option></select></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field" data-field="rate_value" value="0"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field" data-field="duration" value="1"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-cost-field" data-field="cost_price" value="0"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-markup-field" data-field="markup_percent" value="' + defaultMarkup + '"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-sell-field" data-field="sell_price" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-line-total-field" data-field="line_total_sell" readonly value="0.00"></td>';
+  } else if (tab === 'construction' || tab === 'retrofitting') {
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-description" data-field="description" value=""></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="unit" value=""></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-qty-field" data-field="quantity" value="1"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-sell-field" data-field="sell_price" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="line_total_cost" readonly value="0.00"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-markup-field" data-field="markup_percent" value="' + defaultMarkup + '"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-line-total-field" data-field="line_total_sell" readonly value="0.00"></td>';
+  } else if (tab === 'promotional') {
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-description qt-item-autocomplete" data-field="description" value=""><input type="hidden" class="qt-field" data-field="commodity_id" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="item_code" value=""></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="unit" value=""></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field" data-field="stock_qty" readonly value="0"></td>';
+    h += '<td><input type="number" step="1" min="1" class="form-control input-sm qt-field qt-qty-field" data-field="quantity" value="1"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-cost-field" data-field="cost_price" value="0"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-markup-field" data-field="markup_percent" value="' + defaultMarkup + '"></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-sell-field" data-field="sell_price" value="0"></td>';
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-line-total-field" data-field="line_total_sell" readonly value="0.00"></td>';
+  } else {
+    h += '<td><input type="text" class="form-control input-sm qt-field qt-description" data-field="description" value=""></td>';
+    h += '<td><input type="number" step="0.01" min="0" class="form-control input-sm qt-field qt-sell-field" data-field="sell_price" value="0"></td>';
+    h += '<td><select class="form-control input-sm qt-field" data-field="is_taxable"><option value="1" selected>Yes</option><option value="0">No</option></select></td>';
+  }
+
+  h += '<td><button type="button" class="btn btn-xs btn-danger qt-delete-line" data-id="0"><i class="fa fa-trash"></i></button></td>';
+  h += '</tr>';
+  return jQuery(h);
+}
+
 function qt_add_row(e) {
   if (e) {
     e.preventDefault();
@@ -272,8 +331,8 @@ function qt_add_row(e) {
     return;
   }
   if (pid < 1) {
-    var $blank = jQuery('<tr class="qt-line-row qt-unsaved" data-line-id="0" data-tab="' + tab + '" data-section="' + section + '"><td colspan="20" class="text-muted">Save the proposal to persist this row.</td></tr>');
-    $tbody.append($blank);
+    $tbody.find('tr.qt-unsaved').remove();
+    $tbody.append(qt_build_local_draft_row(tab, section));
     return;
   }
   var payload = qt_default_add_payload(tab, section);
@@ -333,6 +392,20 @@ function qt_init_worksheet() {
   }
 
   qt_sync_proposal_id_from_form();
+
+  $panel.find('.qt-lines-tbody').each(function () {
+    var $tbody = jQuery(this);
+    var tab = $tbody.attr('data-tab') || '';
+    var section = $tbody.attr('data-section') || '';
+    var count = $tbody.find('tr.qt-unsaved').length;
+    if (!count || !tab) {
+      return;
+    }
+    $tbody.find('tr.qt-unsaved').remove();
+    for (var i = 0; i < count; i++) {
+      $tbody.append(qt_build_local_draft_row(tab, section));
+    }
+  });
 
   setInterval(function () {
     var cur = qt_get_active_proposal_id();

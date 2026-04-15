@@ -2439,6 +2439,9 @@ $(function () {
     calculate_total();
 
     $("body").find("#items-warning").remove();
+    var hasQtWorksheet = $(this).find('input[name="qt_worksheet"]').length > 0;
+    var hasQtWorksheetRows =
+      $(this).find("#qt-worksheet-panel .qt-lines-tbody tr.qt-line-row").length > 0;
     var $itemsTable = $(this).find("table.items");
     var $previewItem = $itemsTable.find(".main");
 
@@ -2459,7 +2462,11 @@ $(function () {
 
       return false;
     } else {
-      if ($itemsTable.length && $itemsTable.find(".item").length === 0) {
+      if (
+        $itemsTable.length &&
+        $itemsTable.find(".item").length === 0 &&
+        !(hasQtWorksheet && hasQtWorksheetRows)
+      ) {
         $itemsTable.before(
           '<div class="alert alert-warning mbot20" id="items-warning">' +
             app.lang.no_items_warning +

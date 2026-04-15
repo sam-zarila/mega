@@ -90,7 +90,11 @@ function qt_inject_head_assets()
         'discount_threshold' => (float) qt_setting('qt_discount_approval_threshold', 0),
     ];
 
-    echo '<link href="' . module_dir_url(QT_MODULE_NAME, 'assets/css/worksheet.css') . '" rel="stylesheet" type="text/css" />';
+    $cssPath = module_dir_path(QT_MODULE_NAME, 'assets/css/worksheet.css');
+    $cssVer  = file_exists($cssPath) ? (string) filemtime($cssPath) : QT_VERSION;
+    $cssUrl  = module_dir_url(QT_MODULE_NAME, 'assets/css/worksheet.css') . '?v=' . $cssVer;
+
+    echo '<link href="' . $cssUrl . '" rel="stylesheet" type="text/css" />';
     echo '<script>var qt_config = ' . json_encode($config) . ';</script>';
 }
 
@@ -100,7 +104,9 @@ function qt_inject_footer_assets()
         return;
     }
 
-    $jsUrl    = module_dir_url(QT_MODULE_NAME, 'assets/js/worksheet.js');
+    $jsPath   = module_dir_path(QT_MODULE_NAME, 'assets/js/worksheet.js');
+    $jsVer    = file_exists($jsPath) ? (string) filemtime($jsPath) : QT_VERSION;
+    $jsUrl    = module_dir_url(QT_MODULE_NAME, 'assets/js/worksheet.js') . '?v=' . $jsVer;
     $ajaxBase = admin_url('quotation_worksheet/');
 
     echo '<script src="' . $jsUrl . '"></script>';
