@@ -1,0 +1,170 @@
+/* Status pipeline stepper */
+.jc-pipeline {
+  position: relative;
+  padding: 0;
+  list-style: none;
+}
+.jc-pipeline-step {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 0;
+  position: relative;
+}
+.jc-pipeline-step::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: -8px;
+  width: 2px;
+  background: #e5e5e5;
+}
+.jc-pipeline-step:last-child::before { display: none; }
+.jc-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  flex-shrink: 0;
+  margin-right: 12px;
+  position: relative;
+  z-index: 1;
+}
+.jc-step-dot.completed {
+  background: #28a745;
+  border-color: #28a745;
+  color: white;
+}
+.jc-step-dot.current {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+  box-shadow: 0 0 0 3px rgba(0,123,255,0.2);
+}
+.jc-step-content { flex: 1; }
+.jc-step-label {
+  font-weight: 500;
+  font-size: 13px;
+  color: #333;
+}
+.jc-step-label.dimmed { color: #aaa; }
+.jc-step-time {
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+}
+
+/* Timeline */
+.jc-timeline { position: relative; padding-left: 24px; }
+.jc-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #e5e5e5;
+}
+.jc-timeline-event {
+  position: relative;
+  margin-bottom: 16px;
+}
+.jc-timeline-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: absolute;
+  left: -20px;
+  top: 2px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #ddd;
+}
+.jc-timeline-dot.status-1 { background: #6c757d; }
+.jc-timeline-dot.status-2 { background: #fd7e14; }
+.jc-timeline-dot.status-3 { background: #007bff; }
+.jc-timeline-dot.status-4 { background: #6f42c1; }
+.jc-timeline-dot.status-5 { background: #17a2b8; }
+.jc-timeline-dot.status-6 { background: #28a745; }
+.jc-timeline-dot.status-7 { background: #6c757d; }
+.jc-timeline-body { font-size: 13px; }
+.jc-timeline-actor { font-weight: 500; color: #333; }
+.jc-timeline-time { font-size: 11px; color: #888; }
+.jc-timeline-notes { font-size: 12px; color: #666; font-style: italic; margin-top: 2px; }
+
+/* Department routing chips */
+.jc-dept-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 2px;
+}
+.jc-dept-chip.studio     { background: #e8f4fd; color: #0c5460; }
+.jc-dept-chip.stores     { background: #fff3cd; color: #856404; }
+.jc-dept-chip.field_team { background: #d1e7dd; color: #0f5132; }
+.jc-dept-chip.warehouse  { background: #f8d7da; color: #842029; }
+
+/* Status badges (override Bootstrap for custom colors) */
+.jc-status-1 { background: #6c757d; color: #fff; }
+.jc-status-2 { background: #fd7e14; color: #fff; }
+.jc-status-3 { background: #007bff; color: #fff; }
+.jc-status-4 { background: #6f42c1; color: #fff; }
+.jc-status-5 { background: #17a2b8; color: #fff; }
+.jc-status-6 { background: #28a745; color: #fff; }
+.jc-status-7 { background: #6c757d; color: #fff; }
+.jc-status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Overdue row highlight */
+.jc-overdue td { background-color: #fff5f5 !important; }
+.jc-overdue .jc-deadline { color: #dc3545; font-weight: 600; }
+
+/* Material issue table */
+.stock-insufficient { background-color: #fff3cd !important; }
+.stock-ok { color: #28a745; }
+.stock-low { color: #dc3545; font-weight: bold; }
+
+/* Stat cards */
+.jc-stat-card {
+  text-align: center;
+  padding: 12px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+.jc-stat-card:hover, .jc-stat-card.active {
+  border-color: #337ab7;
+}
+.jc-stat-card .stat-num {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.jc-stat-card .stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+}
+
+/* Advance status panel */
+#jc-advance-panel {
+  border-left: 4px solid #007bff;
+  border-radius: 0 6px 6px 0;
+}

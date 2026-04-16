@@ -32,6 +32,11 @@ function jc_module_activation()
     require_once module_dir_path(JC_MODULE_NAME, 'install.php');
 }
 
+/**
+ * Determine if current request is for job cards admin pages.
+ *
+ * @return bool
+ */
 function jc_is_job_cards_page()
 {
     $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
@@ -39,7 +44,12 @@ function jc_is_job_cards_page()
     return $uri !== '' && stripos($uri, '/admin/job_cards') !== false;
 }
 
-function jc_get_current_staff_role_name()
+/**
+ * Resolve current staff role name.
+ *
+ * @return string
+ */
+function jc_get_current_staff_role()
 {
     if (!function_exists('is_staff_logged_in') || !is_staff_logged_in()) {
         return '';
@@ -60,15 +70,22 @@ function jc_get_current_staff_role_name()
     return $row && isset($row->role_name) ? (string) $row->role_name : '';
 }
 
+/**
+ * Map a role name to one or more job card departments.
+ *
+ * @param string $roleName
+ * @return array
+ */
 function jc_get_departments_for_role($roleName)
 {
     $roleName = (string) $roleName;
-    $map      = [
-        'Studio/Production'      => ['studio'],
-        'Storekeeper/Stores Clerk' => ['stores'],
-        'Store Manager'          => ['stores'],
-        'Field Team'             => ['field_team'],
-        'Warehouse'              => ['warehouse'],
+
+    $map = [
+        jc_setting('jc_studio_role', 'Studio/Production')          => ['studio'],
+        jc_setting('jc_stores_role', 'Storekeeper/Stores Clerk')   => ['stores'],
+        jc_setting('jc_store_manager_role', 'Store Manager')        => ['stores'],
+        jc_setting('jc_field_team_role', 'Field Team')              => ['field_team'],
+        jc_setting('jc_warehouse_role', 'Storekeeper/Stores Clerk') => ['warehouse'],
     ];
 
     return $map[$roleName] ?? [];
@@ -81,7 +98,7 @@ function jc_init_menu_items()
     }
 
     $badgeCount = 0;
-    $roleName   = jc_get_current_staff_role_name();
+    $roleName   = jc_get_current_staff_role();
     $departments = jc_get_departments_for_role($roleName);
 
     if (!empty($departments)) {
@@ -153,7 +170,7 @@ function jc_check_overdue_cards()
     $CI = &get_instance();
     $CI->db->from(db_prefix() . 'ipms_job_cards');
     $CI->db->where('deadline IS NOT NULL', null, false);
-    $CI->db->where('deadline <', date('Y-m-d H:i:s'));
+    $CI->db->where('deadline <', date('Y-m-d'));
     $CI->db->where_not_in('status', [6, 7]);
     $rows = $CI->db->get()->result();
 
@@ -184,6 +201,10 @@ function jc_check_overdue_cards()
             }
         }
 
-        log_activity('Job Card ' . $jc->jc_ref . ' is overdue');
+        if (function_exists('log_activity')) {
+            log_activity('Job Card ' . $jc->jc_ref . ' is overdue');
+        } else {
+            log_message('info', 'Job Card ' . $jc->jc_ref . ' is overdue');
+        }
     }
 }
