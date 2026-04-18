@@ -138,11 +138,15 @@ class Inventory_mgr extends AdminController
     protected function generate_next_commodity_code()
     {
         $p = db_prefix();
+        if (!$this->db->table_exists($p . 'items') || !$this->db->field_exists('commodity_code', $p . 'items')) {
+            return 'ITEM-00001';
+        }
         $this->db->select('commodity_code');
         $this->db->from($p . 'items');
         $this->db->order_by('id', 'DESC');
         $this->db->limit(1);
-        $row  = $this->db->get()->row();
+        $q = $this->db->get();
+        $row = ($q !== false) ? $q->row() : null;
         $last = $row && isset($row->commodity_code) ? (string) $row->commodity_code : '';
 
         if ($last !== '' && preg_match('/^(.*?)(\d+)$/', $last, $m)) {
@@ -190,14 +194,27 @@ class Inventory_mgr extends AdminController
         }
 
         $p = db_prefix();
-        $this->db->insert($p . 'ware_commodity_type', [
+        $t = $p . 'ware_commodity_type';
+        if (!$this->db->table_exists($t)) {
+            $this->output->set_status_header(400)->set_content_type('application/json')->set_output(json_encode([
+                'success' => false,
+                'message' => 'Category table is missing. Install/activate the Warehouse module (or create tblware_commodity_type).',
+            ]));
+
+            return;
+        }
+        $this->db->insert($t, [
             'commondity_code' => $code !== '' ? $code : null,
             'commondity_name' => $name,
             'display'         => 1,
         ]);
         $id = (int) $this->db->insert_id();
         if ($id < 1) {
-            $this->output->set_status_header(500)->set_content_type('application/json')->set_output(json_encode(['success' => false]));
+            $err = $this->db->error();
+            $this->output->set_status_header(500)->set_content_type('application/json')->set_output(json_encode([
+                'success' => false,
+                'message' => !empty($err['message']) ? $err['message'] : 'Insert failed',
+            ]));
 
             return;
         }
@@ -233,7 +250,16 @@ class Inventory_mgr extends AdminController
         }
 
         $p = db_prefix();
-        $this->db->insert($p . 'ware_unit_type', [
+        $t = $p . 'ware_unit_type';
+        if (!$this->db->table_exists($t)) {
+            $this->output->set_status_header(400)->set_content_type('application/json')->set_output(json_encode([
+                'success' => false,
+                'message' => 'Unit table is missing. Install/activate the Warehouse module (or create tblware_unit_type).',
+            ]));
+
+            return;
+        }
+        $this->db->insert($t, [
             'unit_code'   => $code !== '' ? $code : null,
             'unit_name'   => $name,
             'unit_symbol' => $symbol !== '' ? $symbol : $name,
@@ -241,7 +267,11 @@ class Inventory_mgr extends AdminController
         ]);
         $id = (int) $this->db->insert_id();
         if ($id < 1) {
-            $this->output->set_status_header(500)->set_content_type('application/json')->set_output(json_encode(['success' => false]));
+            $err = $this->db->error();
+            $this->output->set_status_header(500)->set_content_type('application/json')->set_output(json_encode([
+                'success' => false,
+                'message' => !empty($err['message']) ? $err['message'] : 'Insert failed',
+            ]));
 
             return;
         }
@@ -270,27 +300,32 @@ class Inventory_mgr extends AdminController
             'low_stock_only' => (string) $this->input->get('low_stock') === '1',
         ];
 
-        $data['title'] = 'Stock Master — All Items';
-        $list            = $this->inventory_mgr_model->get_item('', $filters);
-        $data['items']   = $this->enrich_items_for_list(is_array($list) ? $list : []);
-        $data['low_stock_items']  = inv_mgr_get_low_stock_items();
-        $data['filters']          = $filters;
-        $data['categories']       = inv_mgr_get_categories();
-        $data['warehouses']       = inv_mgr_get_warehouses();
-        $data['item_groups']      = [];
-        $igTable = db_prefix() . 'items_groups';
-        if ($this->db->table_exists($igTable)) {
-            if ($this->db->field_exists('name', $igTable)) {
-                $this->db->order_by('name', 'ASC');
+        try {
+            $data['title']            = 'Stock Master — All Items';
+            $list                     = $this->inventory_mgr_model->get_item('', $filters);
+            $data['items']            = $this->enrich_items_for_list(is_array($list) ? $list : []);
+            $data['low_stock_items']  = inv_mgr_get_low_stock_items();
+            $data['filters']          = $filters;
+            $data['categories']       = inv_mgr_get_categories();
+            $data['warehouses']       = inv_mgr_get_warehouses();
+            $data['item_groups']      = [];
+            $igTable = db_prefix() . 'items_groups';
+            if ($this->db->table_exists($igTable)) {
+                if ($this->db->field_exists('name', $igTable)) {
+                    $this->db->order_by('name', 'ASC');
+                }
+                $igQ = $this->db->get($igTable);
+                $data['item_groups'] = ($igQ !== false) ? $igQ->result_array() : [];
+                if ($igQ === false) {
+                    log_message('error', 'inventory_mgr/items items_groups: ' . json_encode($this->db->error()));
+                }
             }
-            $igQ = $this->db->get($igTable);
-            $data['item_groups'] = ($igQ !== false) ? $igQ->result_array() : [];
-            if ($igQ === false) {
-                log_message('error', 'inventory_mgr/items items_groups: ' . json_encode($this->db->error()));
-            }
-        }
 
-        $this->load->view('inventory_mgr/items_list', $data);
+            $this->load->view('inventory_mgr/items_list', $data);
+        } catch (Throwable $e) {
+            log_message('error', 'inventory_mgr/items: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            show_error('Stock Master could not load. ' . $e->getMessage(), 500, 'Inventory');
+        }
     }
 
     public function add_item()

@@ -300,68 +300,94 @@ init_head();
   </div>
 </div>
 
+<?php init_tail(); ?>
 <script>
 (function ($) {
+  'use strict';
   var urlAjaxCode = <?= json_encode(admin_url('inventory_mgr/ajax_next_item_code')); ?>;
   var urlQuickCat = <?= json_encode(admin_url('inventory_mgr/quick_add_category')); ?>;
   var urlQuickUnit = <?= json_encode(admin_url('inventory_mgr/quick_add_unit')); ?>;
   var csrfName = <?= json_encode($csrf['name']); ?>;
   var csrfHash = <?= json_encode($csrf['hash']); ?>;
 
-  $('#generate-code').on('click', function () {
-    $.get(urlAjaxCode, function (res) {
-      if (res && res.next_code) {
-        $('#commodity_code').val(res.next_code);
-      }
-    }, 'json');
-  });
-
-  $('#purchase_price').on('change', function () {
-    var cost = parseFloat($(this).val()) || 0;
-    var currentSell = parseFloat($('#rate').val()) || 0;
-    if (currentSell === 0 || currentSell < cost) {
-      $('#rate').val((cost * 1.25).toFixed(2));
-    }
-  });
-
-  function postQuick(url, data, onOk) {
-    data[csrfName] = csrfHash;
-    $.post(url, data, function (res) {
-      if (res && res.success) {
-        if (res.csrf_hash) { csrfHash = res.csrf_hash; }
-        onOk(res);
-      } else {
-        alert(res && res.message ? res.message : 'Save failed');
-      }
-    }, 'json').fail(function () { alert('Request failed'); });
-  }
-
-  $('#cat-save').on('click', function () {
-    $('#cat-err').hide();
-    postQuick(urlQuickCat, {
-      commondity_name: $('#cat-name').val(),
-      commondity_code: $('#cat-code').val()
-    }, function (res) {
-      var $sel = $('#commodity_type');
-      $sel.append($('<option/>', { value: res.id, text: res.label, selected: true }));
-      $('#modal-add-category').modal('hide');
-      $('#cat-name,#cat-code').val('');
+  $(function () {
+    $('#generate-code').on('click', function () {
+      $.getJSON(urlAjaxCode)
+        .done(function (res) {
+          if (res && res.next_code) {
+            $('#commodity_code').val(res.next_code);
+          }
+        })
+        .fail(function (xhr) {
+          var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Could not generate code';
+          alert(msg);
+        });
     });
-  });
 
-  $('#unit-save').on('click', function () {
-    $('#unit-err').hide();
-    postQuick(urlQuickUnit, {
-      unit_name: $('#unit-name').val(),
-      unit_code: $('#unit-code').val(),
-      unit_symbol: $('#unit-symbol').val()
-    }, function (res) {
-      var $sel = $('#unit_id');
-      $sel.append($('<option/>', { value: res.id, text: res.label, selected: true }));
-      $('#modal-add-unit').modal('hide');
-      $('#unit-name,#unit-code,#unit-symbol').val('');
+    $('#purchase_price').on('change', function () {
+      var cost = parseFloat($(this).val()) || 0;
+      var currentSell = parseFloat($('#rate').val()) || 0;
+      if (currentSell === 0 || currentSell < cost) {
+        $('#rate').val((cost * 1.25).toFixed(2));
+      }
+    });
+
+    function postQuick(url, data, onOk) {
+      data[csrfName] = csrfHash;
+      $.post(url, data, function (res) {
+        if (res && res.success) {
+          if (res.csrf_hash) {
+            csrfHash = res.csrf_hash;
+          }
+          onOk(res);
+        } else {
+          alert(res && res.message ? res.message : 'Save failed');
+        }
+      }, 'json').fail(function (xhr) {
+        var msg = 'Request failed';
+        var j = xhr.responseJSON;
+        if (!j && xhr.responseText) {
+          try {
+            j = JSON.parse(xhr.responseText);
+          } catch (e) {
+            j = null;
+          }
+        }
+        if (j && j.message) {
+          msg = j.message;
+        } else if (xhr.status === 403) {
+          msg = 'Session expired or access denied — refresh the page and try again.';
+        }
+        alert(msg);
+      });
+    }
+
+    $('#cat-save').on('click', function () {
+      $('#cat-err').hide();
+      postQuick(urlQuickCat, {
+        commondity_name: $('#cat-name').val(),
+        commondity_code: $('#cat-code').val()
+      }, function (res) {
+        var $sel = $('#commodity_type');
+        $sel.append($('<option/>', { value: res.id, text: res.label, selected: true }));
+        $('#modal-add-category').modal('hide');
+        $('#cat-name,#cat-code').val('');
+      });
+    });
+
+    $('#unit-save').on('click', function () {
+      $('#unit-err').hide();
+      postQuick(urlQuickUnit, {
+        unit_name: $('#unit-name').val(),
+        unit_code: $('#unit-code').val(),
+        unit_symbol: $('#unit-symbol').val()
+      }, function (res) {
+        var $sel = $('#unit_id');
+        $sel.append($('<option/>', { value: res.id, text: res.label, selected: true }));
+        $('#modal-add-unit').modal('hide');
+        $('#unit-name,#unit-code,#unit-symbol').val('');
+      });
     });
   });
 })(jQuery);
 </script>
-<?php init_tail(); ?>

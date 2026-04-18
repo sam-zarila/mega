@@ -592,22 +592,6 @@ function inv_mgr_get_all_items($filters = [])
 
     $hasCode = $CI->db->field_exists('commodity_code', $itemsT);
 
-    $subTotal = $hasIm
-        ? '(SELECT COALESCE(SUM(CAST(imt.inventory_number AS DECIMAL(10,3))), 0)
-        FROM `' . $imT . '` imt WHERE imt.commodity_id = i.id)'
-        : '0';
-
-    $subWh = $hasIm
-        ? '(SELECT GROUP_CONCAT(CONCAT(z.warehouse_id, ":", z.q) SEPARATOR "|")
-        FROM (
-            SELECT imw.warehouse_id,
-                SUM(CAST(imw.inventory_number AS DECIMAL(10,3))) AS q
-            FROM `' . $imT . '` imw
-            WHERE imw.commodity_id = i.id
-            GROUP BY imw.warehouse_id
-        ) z)'
-        : 'NULL';
-
     $CI->db->select('i.*', false);
     if ($hasUt) {
         $CI->db->select('u.unit_symbol, u.unit_name', false);
@@ -626,8 +610,7 @@ function inv_mgr_get_all_items($filters = [])
     } else {
         $CI->db->select("'' AS group_name", false);
     }
-    $CI->db->select($subTotal . ' AS total_qty', false);
-    $CI->db->select($subWh . ' AS warehouse_qty_raw', false);
+
     $CI->db->from($p . 'items i');
     if ($hasUt) {
         $CI->db->join($utT . ' u', 'u.unit_type_id = i.unit_id', 'left');
@@ -694,12 +677,61 @@ function inv_mgr_get_all_items($filters = [])
         return [];
     }
     $rows = $q->result_array();
-    $out  = [];
+
+    $aggMap = [];
+    if ($hasIm && $rows !== []) {
+        $ids = [];
+        foreach ($rows as $r0) {
+            if (!empty($r0['id'])) {
+                $ids[] = (int) $r0['id'];
+            }
+        }
+        $ids = array_values(array_unique(array_filter($ids)));
+        if ($ids !== []) {
+            $inList = implode(',', $ids);
+            $aggSql = 'SELECT subq.commodity_id, SUM(subq.q) AS total_qty, '
+                . 'GROUP_CONCAT(CONCAT(subq.warehouse_id, ":", subq.q) ORDER BY subq.warehouse_id SEPARATOR "|") AS warehouse_qty_raw '
+                . 'FROM ('
+                . 'SELECT im.commodity_id, im.warehouse_id, '
+                . 'SUM(CAST(im.inventory_number AS DECIMAL(10,3))) AS q '
+                . 'FROM `' . $imT . '` im '
+                . 'WHERE im.commodity_id IN (' . $inList . ') '
+                . 'GROUP BY im.commodity_id, im.warehouse_id'
+                . ') subq GROUP BY subq.commodity_id';
+            try {
+                $q2 = $CI->db->query($aggSql);
+            } catch (Throwable $e) {
+                log_message('error', 'inv_mgr_get_all_items agg query: ' . $e->getMessage());
+                $q2 = false;
+            }
+            if ($q2 !== false) {
+                foreach ($q2->result_array() as $a) {
+                    $cid = (int) ($a['commodity_id'] ?? 0);
+                    if ($cid > 0) {
+                        $aggMap[$cid] = [
+                            'total_qty'           => isset($a['total_qty']) ? (float) $a['total_qty'] : 0.0,
+                            'warehouse_qty_raw'   => $a['warehouse_qty_raw'] ?? null,
+                        ];
+                    }
+                }
+            }
+        }
+    }
+
+    $out = [];
 
     foreach ($rows as $r) {
+        $cid = (int) ($r['id'] ?? 0);
+        $whRaw = null;
+        $tot   = 0.0;
+        if ($hasIm && $cid > 0 && isset($aggMap[$cid])) {
+            $tot   = $aggMap[$cid]['total_qty'];
+            $whRaw = $aggMap[$cid]['warehouse_qty_raw'];
+        }
+
         $whMap = [];
-        if (!empty($r['warehouse_qty_raw'])) {
-            $pairs = explode('|', (string) $r['warehouse_qty_raw']);
+        if ($whRaw !== null && $whRaw !== '') {
+            $pairs = explode('|', (string) $whRaw);
             foreach ($pairs as $pair) {
                 if ($pair === '' || strpos($pair, ':') === false) {
                     continue;
@@ -708,8 +740,7 @@ function inv_mgr_get_all_items($filters = [])
                 $whMap[(int) $wid] = (float) $qty;
             }
         }
-        unset($r['warehouse_qty_raw']);
-        $r['total_qty']       = isset($r['total_qty']) ? (float) $r['total_qty'] : 0.0;
+        $r['total_qty']       = $tot;
         $r['warehouse_qty']   = $whMap;
         $r['category_name']   = isset($r['category_name']) ? (string) $r['category_name'] : '';
         $r['group_name']      = isset($r['group_name']) ? (string) $r['group_name'] : '';
@@ -840,30 +871,73 @@ function inv_mgr_get_units()
 }
 
 /**
+ * Canonical branch warehouses (IDs align with stock master columns / filters).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function inv_mgr_default_warehouses()
+{
+    return [
+        1 => [
+            'warehouse_id'   => 1,
+            'warehouse_name' => 'Blantyre',
+            'warehouse_code' => 'BLT',
+        ],
+        2 => [
+            'warehouse_id'   => 2,
+            'warehouse_name' => 'Lilongwe',
+            'warehouse_code' => 'LLW',
+        ],
+    ];
+}
+
+/**
  * @return array<int, array<string, mixed>>
  */
 function inv_mgr_get_warehouses()
 {
-    $CI = &get_instance();
-    $t = db_prefix() . 'warehouse';
-    if (!$CI->db->table_exists($t)) {
-        return [];
-    }
-    $CI->db->from($t);
-    if ($CI->db->field_exists('display', $t)) {
-        $CI->db->where('display', 1);
-    }
-    if ($CI->db->field_exists('warehouse_id', $t)) {
-        $CI->db->order_by('warehouse_id', 'ASC');
-    }
-    $q = $CI->db->get();
-    if ($q === false) {
-        log_message('error', 'inv_mgr_get_warehouses: ' . json_encode($CI->db->error()));
+    $CI   = &get_instance();
+    $t    = db_prefix() . 'warehouse';
+    $byId = [];
 
-        return [];
+    if ($CI->db->table_exists($t)) {
+        $CI->db->from($t);
+        if ($CI->db->field_exists('display', $t)) {
+            $CI->db->where('display', 1);
+        }
+        if ($CI->db->field_exists('warehouse_id', $t)) {
+            $CI->db->order_by('warehouse_id', 'ASC');
+        }
+        $q = $CI->db->get();
+        if ($q === false) {
+            log_message('error', 'inv_mgr_get_warehouses: ' . json_encode($CI->db->error()));
+        } else {
+            foreach ($q->result_array() as $r) {
+                $id = (int) ($r['warehouse_id'] ?? 0);
+                if ($id > 0) {
+                    $byId[$id] = $r;
+                }
+            }
+        }
     }
 
-    return $q->result_array();
+    foreach (inv_mgr_default_warehouses() as $id => $stub) {
+        if (!isset($byId[$id])) {
+            $byId[$id] = $stub;
+            continue;
+        }
+        $nm = trim((string) ($byId[$id]['warehouse_name'] ?? ''));
+        if ($nm === '') {
+            $byId[$id]['warehouse_name'] = $stub['warehouse_name'];
+        }
+        if (trim((string) ($byId[$id]['warehouse_code'] ?? '')) === '' && !empty($stub['warehouse_code'])) {
+            $byId[$id]['warehouse_code'] = $stub['warehouse_code'];
+        }
+    }
+
+    ksort($byId, SORT_NUMERIC);
+
+    return array_values($byId);
 }
 
 /**
