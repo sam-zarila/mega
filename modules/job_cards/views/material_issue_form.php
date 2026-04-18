@@ -60,7 +60,7 @@
                                 </thead>
                                 <tbody>
                                 <?php foreach ((array) $qt_lines as $line) {
-                                    $itemId = (int) ($line['inventory_item_id'] ?? 0);
+                                    $itemId = (int) ($line['commodity_id'] ?? ($line['inventory_item_id'] ?? 0));
                                     $qtyReq = (float) ($line['quantity'] ?? 0);
                                     $wac    = (float) ($line['wac_price'] ?? 0);
                                     $lineId = (int) ($line['id'] ?? 0);

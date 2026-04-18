@@ -1,0 +1,87 @@
+/* WAC display */
+.wac-value { font-family: monospace; font-weight: 600; color: #333; }
+.wac-up    { color: #dc3545; }
+.wac-down  { color: #28a745; }
+.wac-same  { color: #6c757d; }
+
+/* Warehouse select cards */
+.wh-select-card {
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 8px;
+}
+.wh-select-card.active,
+.wh-select-card:has(input:checked) {
+  border-color: #007bff;
+  background: #e8f4fd;
+}
+.wh-card-label {
+  cursor: pointer;
+  width: 100%;
+  display: block;
+}
+.wh-card-label strong {
+  display: block;
+  font-size: 15px;
+}
+
+/* Stock status indicators */
+.stock-qty-display { font-weight: 600; font-family: monospace; }
+.input-danger { border-color: #dc3545 !important; background: #fff5f5 !important; }
+
+/* Items list table */
+.items-table tr.zero-stock { opacity: 0.6; background: #f8f9fa !important; }
+.items-table tr.low-stock  { background: #fff8e1 !important; }
+.items-table .item-code    { font-family: monospace; font-size: 12px; color: #555; }
+
+/* Issue form section headers */
+.issue-section-header {
+  background: #f0f4f8;
+  border-left: 4px solid #007bff;
+  padding: 8px 14px;
+  margin: 16px 0 8px;
+  border-radius: 0 4px 4px 0;
+  font-weight: 500;
+}
+
+/* Movement history */
+.movement-row td { font-size: 13px; }
+.movement-grn       { border-left: 3px solid #28a745; }
+.movement-issue     { border-left: 3px solid #fd7e14; }
+.movement-adj       { border-left: 3px solid #6f42c1; }
+.movement-transfer  { border-left: 3px solid #17a2b8; }
+
+/* GRN WAC preview cell */
+.grn-wac-preview { font-size: 12px; font-family: monospace; }
+
+/* GRN form (used with InvMgr.grnForm) */
+.grn-row .grn-wac-preview .text-success { color: #28a745; }
+.grn-row .grn-wac-preview .text-warning { color: #f0ad4e; }
+.grn-row .grn-wac-preview .text-danger  { color: #d9534f; }
+
+/* Low stock alert badge */
+.low-stock-badge {
+  background: #dc3545;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.mtop5 { margin-top: 5px; }
+.mtop10 { margin-top: 10px; }
+.mtop15 { margin-top: 15px; }
+.mtop20 { margin-top: 20px; }
+.table-borderless td { border: none !important; }
+
+.wh-select-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}

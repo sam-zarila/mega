@@ -124,10 +124,25 @@ class Job_cards_model extends App_Model
     public function get_issue_lines($issue_id)
     {
         $p = db_prefix();
-        $this->db->select('l.*, c.commodity_name, c.wac_price AS current_wac, u.unit_symbol', false);
+        $commodityTable = $p . 'ware_commodity';
+        $itemsTable     = $p . 'items';
+        $useCommodity   = $this->db->table_exists($commodityTable);
+        $useItems       = !$useCommodity && $this->db->table_exists($itemsTable);
+
+        if ($useCommodity) {
+            $this->db->select('l.*, c.commodity_name, c.wac_price AS current_wac, u.unit_symbol', false);
+        } elseif ($useItems) {
+            $this->db->select('l.*, i.commodity_name, i.purchase_price AS current_wac, i.unit AS unit_symbol', false);
+        } else {
+            $this->db->select('l.*', false);
+        }
         $this->db->from($p . 'ipms_jc_material_issue_lines l');
-        $this->db->join($p . 'ware_commodity c', 'c.commodity_id = l.inventory_item_id', 'left');
-        $this->db->join($p . 'ware_unit_type u', 'u.unit_type_id = c.unit_type_id', 'left');
+        if ($useCommodity) {
+            $this->db->join($commodityTable . ' c', 'c.commodity_id = l.inventory_item_id', 'left');
+            $this->db->join($p . 'ware_unit_type u', 'u.unit_type_id = c.unit_type_id', 'left');
+        } elseif ($useItems) {
+            $this->db->join($itemsTable . ' i', 'i.id = l.inventory_item_id', 'left');
+        }
         $this->db->where('l.issue_id', (int) $issue_id);
         $this->db->order_by('l.id', 'ASC');
 
@@ -216,15 +231,41 @@ class Job_cards_model extends App_Model
                 continue;
             }
 
-            $this->db->select('commodity_id, commodity_code, commodity_name, wac_price');
-            $this->db->from($p . 'ware_commodity');
-            $this->db->where('commodity_id', $itemId);
-            $commodity = $this->db->get()->row();
-            if (!$commodity) {
+            $commodityTable = $p . 'ware_commodity';
+            $itemsTable     = $p . 'items';
+            $item           = null;
+            $wac            = 0.0;
+            $itemCode       = '';
+            $itemName       = '';
+            $canDeductStock = false;
+
+            if ($this->db->table_exists($commodityTable)) {
+                $this->db->select('commodity_id, commodity_code, commodity_name, wac_price');
+                $this->db->from($commodityTable);
+                $this->db->where('commodity_id', $itemId);
+                $item = $this->db->get()->row();
+                if ($item) {
+                    $wac            = (float) ($item->wac_price ?? 0);
+                    $itemCode       = (string) ($item->commodity_code ?? '');
+                    $itemName       = (string) ($item->commodity_name ?? '');
+                    $canDeductStock = $this->db->field_exists('current_quantity', $commodityTable);
+                }
+            } elseif ($this->db->table_exists($itemsTable)) {
+                $this->db->select('id, commodity_code, commodity_name, purchase_price');
+                $this->db->from($itemsTable);
+                $this->db->where('id', $itemId);
+                $item = $this->db->get()->row();
+                if ($item) {
+                    $wac      = (float) ($item->purchase_price ?? 0);
+                    $itemCode = (string) ($item->commodity_code ?? '');
+                    $itemName = (string) ($item->commodity_name ?? '');
+                }
+            }
+
+            if (!$item) {
                 continue;
             }
 
-            $wac       = (float) $commodity->wac_price;
             $lineTotal = round($qty * $wac, 2);
             $totalCost += $lineTotal;
 
@@ -232,8 +273,8 @@ class Job_cards_model extends App_Model
                 'issue_id'          => $issue_id,
                 'job_card_id'       => $job_card_id,
                 'inventory_item_id' => $itemId,
-                'item_code'         => isset($line['item_code']) ? $line['item_code'] : (string) $commodity->commodity_code,
-                'item_description'  => isset($line['item_description']) ? $line['item_description'] : (string) $commodity->commodity_name,
+                'item_code'         => isset($line['item_code']) ? $line['item_code'] : $itemCode,
+                'item_description'  => isset($line['item_description']) ? $line['item_description'] : $itemName,
                 'unit'              => isset($line['unit']) ? $line['unit'] : null,
                 'qty_required'      => isset($line['qty_required']) ? (float) $line['qty_required'] : null,
                 'qty_issued'        => $qty,
@@ -242,9 +283,11 @@ class Job_cards_model extends App_Model
                 'qt_line_id'        => isset($line['qt_line_id']) ? (int) $line['qt_line_id'] : null,
             ]);
 
-            $this->db->set('current_quantity', 'current_quantity - ' . $this->db->escape_str((string) $qty), false);
-            $this->db->where('commodity_id', $itemId);
-            $this->db->update($p . 'ware_commodity');
+            if ($canDeductStock) {
+                $this->db->set('current_quantity', 'current_quantity - ' . $this->db->escape_str((string) $qty), false);
+                $this->db->where('commodity_id', $itemId);
+                $this->db->update($commodityTable);
+            }
         }
 
         $this->db->where('id', $issue_id);
@@ -285,13 +328,35 @@ class Job_cards_model extends App_Model
 
     public function get_qt_lines_for_job($proposal_id)
     {
-        $p = db_prefix();
-        $this->db->select('l.*, c.commodity_name, c.wac_price, c.commodity_code', false);
-        $this->db->from($p . 'ipms_qt_lines l');
-        $this->db->join($p . 'ware_commodity c', 'c.commodity_id = l.inventory_item_id', 'left');
+        $p       = db_prefix();
+        $qtTable = $p . 'ipms_qt_lines';
+        // M03 quotation worksheet uses commodity_id; tolerate legacy column name if present.
+        $idCol = 'commodity_id';
+        if (!$this->db->field_exists('commodity_id', $qtTable) && $this->db->field_exists('inventory_item_id', $qtTable)) {
+            $idCol = 'inventory_item_id';
+        }
+
+        $commodityTable = $p . 'ware_commodity';
+        $itemsTable     = $p . 'items';
+        $useCommodity   = $this->db->table_exists($commodityTable);
+        $useItems       = !$useCommodity && $this->db->table_exists($itemsTable);
+
+        if ($useCommodity) {
+            $this->db->select('l.*, c.commodity_name, c.wac_price, c.commodity_code', false);
+        } elseif ($useItems) {
+            $this->db->select('l.*, i.commodity_name, i.purchase_price AS wac_price, i.commodity_code', false);
+        } else {
+            $this->db->select('l.*', false);
+        }
+        $this->db->from($qtTable . ' l');
+        if ($useCommodity) {
+            $this->db->join($commodityTable . ' c', 'c.commodity_id = l.' . $idCol, 'left');
+        } elseif ($useItems) {
+            $this->db->join($itemsTable . ' i', 'i.id = l.' . $idCol, 'left');
+        }
         $this->db->where('l.proposal_id', (int) $proposal_id);
-        $this->db->where('l.inventory_item_id IS NOT NULL', null, false);
-        $this->db->where('l.inventory_item_id >', 0);
+        $this->db->where('l.' . $idCol . ' IS NOT NULL', null, false);
+        $this->db->where('l.' . $idCol . ' >', 0);
         $this->db->order_by('l.id', 'ASC');
 
         return $this->db->get()->result_array();

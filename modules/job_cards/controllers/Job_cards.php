@@ -203,6 +203,12 @@ class Job_cards extends AdminController
             redirect(admin_url('job_cards'));
         }
 
+        if (!$this->input->post() && module_dir_path('inventory_mgr', 'controllers/Inventory_mgr.php')) {
+            redirect(admin_url('inventory_mgr/issue_form/' . $job_card_id));
+
+            return;
+        }
+
         if ($this->input->post()) {
             $warehouseId = (int) $this->input->post('warehouse_id');
             $qtyIssued   = (array) $this->input->post('qty_issued');
@@ -223,12 +229,26 @@ class Job_cards extends AdminController
                     continue;
                 }
 
-                $commodity = $this->db->where('commodity_id', $itemId)->get(db_prefix() . 'ware_commodity')->row();
+                $p = db_prefix();
+                $commodity = null;
+                if ($this->db->table_exists($p . 'ware_commodity')) {
+                    $commodity = $this->db->where('commodity_id', $itemId)->get($p . 'ware_commodity')->row();
+                    if ($commodity) {
+                        $commodity->wac_price = isset($commodity->wac_price) ? (float) $commodity->wac_price : 0.0;
+                    }
+                } elseif ($this->db->table_exists($p . 'items')) {
+                    $commodity = $this->db->where('id', $itemId)->get($p . 'items')->row();
+                    if ($commodity) {
+                        $commodity->commodity_code = isset($commodity->commodity_code) ? $commodity->commodity_code : '';
+                        $commodity->commodity_name = isset($commodity->commodity_name) ? $commodity->commodity_name : '';
+                        $commodity->wac_price      = isset($commodity->purchase_price) ? (float) $commodity->purchase_price : 0.0;
+                    }
+                }
                 if (!$commodity) {
                     continue;
                 }
 
-                $available = isset($commodity->current_quantity) ? (float) $commodity->current_quantity : 0.0;
+                $available = isset($commodity->current_quantity) ? (float) $commodity->current_quantity : PHP_FLOAT_MAX;
                 if ($available < $qty) {
                     $shortfalls[] = ($commodity->commodity_name ?: ('Item #' . $itemId)) . ' (need ' . $qty . ', available ' . $available . ')';
                 }
@@ -597,7 +617,10 @@ class Job_cards extends AdminController
         }
 
         $materials = array_values(array_filter($lines, static function ($line) {
-            return isset($line['inventory_item_id']) && (int) $line['inventory_item_id'] > 0;
+            $cid = (int) ($line['commodity_id'] ?? 0);
+            $iid = (int) ($line['inventory_item_id'] ?? 0);
+
+            return $cid > 0 || $iid > 0;
         }));
         $html .= '<div class="sec-head">MATERIALS TO BE ISSUED FROM STORES</div>';
         $html .= '<table class="tbl"><thead><tr><th>Item Code</th><th>Description</th><th>Unit</th><th>Qty Required</th></tr></thead><tbody>';
@@ -726,17 +749,35 @@ class Job_cards extends AdminController
         }
 
         $p = db_prefix();
-        $this->db->select('c.commodity_id, c.commodity_code, c.commodity_name, c.wac_price, c.current_quantity, u.unit_symbol');
-        $this->db->from($p . 'ware_commodity c');
-        if ($this->db->table_exists($p . 'ware_unit_type')) {
-            $this->db->join($p . 'ware_unit_type u', 'u.unit_type_id = c.unit_type_id', 'left');
+        if ($this->db->table_exists($p . 'ware_commodity')) {
+            $this->db->select('c.commodity_id, c.commodity_code, c.commodity_name, c.wac_price, c.current_quantity, u.unit_symbol');
+            $this->db->from($p . 'ware_commodity c');
+            if ($this->db->table_exists($p . 'ware_unit_type')) {
+                $this->db->join($p . 'ware_unit_type u', 'u.unit_type_id = c.unit_type_id', 'left');
+            }
+            $this->db->group_start();
+            $this->db->like('c.commodity_code', $term);
+            $this->db->or_like('c.commodity_name', $term);
+            $this->db->group_end();
+            $this->db->limit(30);
+            $rows = $this->db->get()->result_array();
+        } elseif ($this->db->table_exists($p . 'items')) {
+            $this->db->select('i.id as commodity_id, i.commodity_code, i.commodity_name, i.purchase_price as wac_price, i.unit');
+            $this->db->from($p . 'items i');
+            $this->db->group_start();
+            $this->db->like('i.commodity_code', $term);
+            $this->db->or_like('i.commodity_name', $term);
+            $this->db->group_end();
+            $this->db->limit(30);
+            $rows = $this->db->get()->result_array();
+            foreach ($rows as &$r) {
+                $r['current_quantity'] = 0;
+                $r['unit_symbol']      = isset($r['unit']) ? $r['unit'] : '';
+            }
+            unset($r);
+        } else {
+            $rows = [];
         }
-        $this->db->group_start();
-        $this->db->like('c.commodity_code', $term);
-        $this->db->or_like('c.commodity_name', $term);
-        $this->db->group_end();
-        $this->db->limit(30);
-        $rows = $this->db->get()->result_array();
 
         $warehouseMap = $this->warehouse_name_map();
         $out = [];
@@ -771,6 +812,11 @@ class Job_cards extends AdminController
 
         $p   = db_prefix();
         $tbl = $p . 'ware_commodity';
+        if (!$this->db->table_exists($tbl)) {
+            $this->output->set_content_type('application/json', 'utf-8')->set_output(json_encode(['current_quantity' => 0]));
+
+            return;
+        }
 
         $this->db->select_sum('current_quantity', 'qty');
         $this->db->where('commodity_id', $commodityId);
