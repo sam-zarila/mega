@@ -19,6 +19,8 @@ hooks()->add_action('admin_init', 'jc_init_menu_items');
 hooks()->add_action('app_admin_head', 'jc_add_head_assets');
 hooks()->add_action('app_admin_footer', 'jc_add_footer_assets');
 hooks()->add_action('ipms_document_approved', 'jc_on_proposal_approved');
+hooks()->add_action('proposal_accepted', 'jc_on_proposal_client_accepted');
+hooks()->add_action('after_proposal_staff_status_changed', 'jc_on_proposal_staff_status_changed');
 hooks()->add_action('after_cron_run', 'jc_check_overdue_cards');
 
 register_language_files(JC_MODULE_NAME, [JC_MODULE_NAME]);
@@ -162,7 +164,54 @@ function jc_on_proposal_approved($data)
         return;
     }
 
-    jc_auto_create_from_proposal((int) $data['id']);
+    $proposalId = jc_resolve_proposal_id_from_quotation_approval((int) $data['id']);
+    if ($proposalId < 1) {
+        return;
+    }
+
+    jc_auto_create_from_proposal($proposalId);
+}
+
+/**
+ * Create job card when the customer accepts the proposal (portal), if enabled.
+ *
+ * @param int $proposal_id
+ */
+function jc_on_proposal_client_accepted($proposal_id)
+{
+    if ((string) jc_setting('jc_auto_create_on_approval', '1') !== '1') {
+        return;
+    }
+
+    jc_auto_create_from_proposal((int) $proposal_id);
+}
+
+/**
+ * Create job card when staff sets proposal status to Accepted (admin / pipeline).
+ * Perfex only fires proposal_accepted for client-side acceptance; admin uses this hook.
+ *
+ * @param array $payload keys: proposal_id, old_status, new_status
+ */
+function jc_on_proposal_staff_status_changed($payload)
+{
+    if (!is_array($payload) || !isset($payload['new_status'])) {
+        return;
+    }
+
+    if ((int) $payload['new_status'] !== 3) {
+        return;
+    }
+
+    if ((string) jc_setting('jc_auto_create_on_approval', '1') !== '1') {
+        return;
+    }
+
+    $proposalId = (int) ($payload['proposal_id'] ?? 0);
+    if ($proposalId < 1) {
+        return;
+    }
+
+    jc_auto_create_from_proposal($proposalId);
 }
 
 function jc_check_overdue_cards()

@@ -330,6 +330,16 @@ class Job_cards_model extends App_Model
     {
         $p       = db_prefix();
         $qtTable = $p . 'ipms_qt_lines';
+        if (!$this->db->table_exists($qtTable)) {
+            $idCol           = 'inventory_item_id';
+            $commodityTable  = $p . 'ware_commodity';
+            $itemsTable      = $p . 'items';
+            $useCommodity    = $this->db->table_exists($commodityTable);
+            $useItems        = !$useCommodity && $this->db->table_exists($itemsTable);
+
+            return $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+        }
+
         // M03 quotation worksheet uses commodity_id; tolerate legacy column name if present.
         $idCol = 'commodity_id';
         if (!$this->db->field_exists('commodity_id', $qtTable) && $this->db->field_exists('inventory_item_id', $qtTable)) {
@@ -359,7 +369,172 @@ class Job_cards_model extends App_Model
         $this->db->where('l.' . $idCol . ' >', 0);
         $this->db->order_by('l.id', 'ASC');
 
-        return $this->db->get()->result_array();
+        $lines = $this->db->get()->result_array();
+        if (!empty($lines)) {
+            return $lines;
+        }
+
+        return $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+    }
+
+    /**
+     * Quotation worksheet lines (ipms_qt_lines) are empty — use IPMS Quotations module lines
+     * linked via proposal → estimate → ipms_quotations.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function get_qt_line_rows_from_ipms_quotation(
+        $proposal_id,
+        $idCol,
+        $useCommodity,
+        $useItems,
+        $commodityTable,
+        $itemsTable
+    ) {
+        $proposal_id = (int) $proposal_id;
+        if ($proposal_id < 1) {
+            return [];
+        }
+
+        $this->load->helper('job_cards/job_cards');
+        if (!function_exists('jc_get_ipms_quotation_for_proposal')) {
+            return [];
+        }
+
+        $proposal = $this->db->where('id', $proposal_id)->get(db_prefix() . 'proposals')->row();
+        if (!$proposal) {
+            return [];
+        }
+
+        $q = jc_get_ipms_quotation_for_proposal($proposal);
+        if (!$q || empty($q->id)) {
+            return [];
+        }
+
+        $p         = db_prefix();
+        $linesTbl  = $p . 'ipms_quotation_lines';
+        if (!$this->db->table_exists($linesTbl)) {
+            return [];
+        }
+
+        $this->db->from($linesTbl . ' l');
+        if ($useCommodity) {
+            $this->db->select('l.*, c.commodity_name, c.wac_price, c.commodity_code', false);
+            $this->db->join($commodityTable . ' c', 'c.commodity_id = l.inventory_item_id', 'left');
+        } elseif ($useItems) {
+            $this->db->select('l.*, i.commodity_name, i.purchase_price AS wac_price, i.commodity_code', false);
+            $this->db->join($itemsTable . ' i', 'i.id = l.inventory_item_id', 'left');
+        } else {
+            $this->db->select('l.*', false);
+        }
+        $this->db->where('l.quotation_id', (int) $q->id);
+        $this->db->order_by('l.id', 'ASC');
+        $rows = $this->db->get()->result_array();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $iid = isset($row['inventory_item_id']) ? (int) $row['inventory_item_id'] : 0;
+            $row['proposal_id']             = $proposal_id;
+            $row['qt_quotation_fallback']   = 1;
+            $row['commodity_id']            = $iid;
+            $row['inventory_item_id']       = $iid > 0 ? $iid : null;
+            if ($idCol !== 'commodity_id') {
+                $row[$idCol] = $iid;
+            }
+
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Rows for inventory_mgr issue form (stdClass list), from worksheet lines and/or IPMS quotation lines.
+     *
+     * @return array<int, object>
+     */
+    public function get_qt_items_for_inventory_issue($proposal_id)
+    {
+        $proposal_id = (int) $proposal_id;
+        $p           = db_prefix();
+        $qt_items    = [];
+
+        $qtTable = $p . 'ipms_qt_lines';
+        if (!$this->db->table_exists($qtTable)) {
+            return $this->build_std_qt_items_from_quotation_lines($proposal_id);
+        }
+
+        $idCol = 'commodity_id';
+        if (!$this->db->field_exists('commodity_id', $qtTable) && $this->db->field_exists('inventory_item_id', $qtTable)) {
+            $idCol = 'inventory_item_id';
+        }
+
+        $helperPath = module_dir_path('inventory_mgr', 'helpers/inventory_mgr_helper.php');
+        if (is_file($helperPath) && !function_exists('inv_mgr_get_item')) {
+            require_once $helperPath;
+        }
+
+        $this->db->where('proposal_id', $proposal_id);
+        $this->db->order_by('line_order', 'ASC');
+        $this->db->order_by('id', 'ASC');
+        $qtLines = $this->db->get($qtTable)->result();
+
+        foreach ($qtLines as $ql) {
+            $itemId = (int) ($ql->{$idCol} ?? 0);
+            $item   = ($itemId > 0 && function_exists('inv_mgr_get_item')) ? inv_mgr_get_item($itemId) : null;
+            $row    = new stdClass();
+            $row->qt_line_id         = (int) ($ql->id ?? 0);
+            $row->inventory_item_id  = $itemId > 0 ? $itemId : null;
+            $row->commodity_code     = $item ? (string) ($item->commodity_code ?? '') : (string) ($ql->item_code ?? '');
+            $row->item_name          = $item ? (string) ($item->description ?? '') : (string) ($ql->description ?? '');
+            $row->unit_symbol        = $item && isset($item->unit_symbol) && (string) $item->unit_symbol !== ''
+                ? (string) $item->unit_symbol
+                : (string) ($ql->unit ?? '');
+            $row->quoted_qty = (float) ($ql->quantity ?? 0);
+            $row->wac        = $itemId > 0 && function_exists('inv_mgr_get_wac') ? inv_mgr_get_wac($itemId) : 0.0;
+            $qt_items[]      = $row;
+        }
+
+        if (!empty($qt_items)) {
+            return $qt_items;
+        }
+
+        return $this->build_std_qt_items_from_quotation_lines($proposal_id);
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    protected function build_std_qt_items_from_quotation_lines($proposal_id)
+    {
+        $rows = $this->get_qt_lines_for_job((int) $proposal_id);
+        if (empty($rows)) {
+            return [];
+        }
+
+        $helperPath = module_dir_path('inventory_mgr', 'helpers/inventory_mgr_helper.php');
+        if (is_file($helperPath) && !function_exists('inv_mgr_get_item')) {
+            require_once $helperPath;
+        }
+
+        $qt_items = [];
+        foreach ($rows as $ln) {
+            $itemId = (int) ($ln['commodity_id'] ?? ($ln['inventory_item_id'] ?? 0));
+            $item   = ($itemId > 0 && function_exists('inv_mgr_get_item')) ? inv_mgr_get_item($itemId) : null;
+            $row    = new stdClass();
+            $row->qt_line_id         = (int) ($ln['id'] ?? 0);
+            $row->inventory_item_id  = $itemId > 0 ? $itemId : null;
+            $row->commodity_code     = $item ? (string) ($item->commodity_code ?? '') : (string) ($ln['commodity_code'] ?? ($ln['item_code'] ?? ''));
+            $row->item_name          = $item ? (string) ($item->description ?? '') : (string) ($ln['description'] ?? ($ln['commodity_name'] ?? ''));
+            $row->unit_symbol        = $item && isset($item->unit_symbol) && (string) $item->unit_symbol !== ''
+                ? (string) $item->unit_symbol
+                : (string) ($ln['unit'] ?? '');
+            $row->quoted_qty = (float) ($ln['quantity'] ?? 0);
+            $row->wac        = $itemId > 0 && function_exists('inv_mgr_get_wac') ? inv_mgr_get_wac($itemId) : (float) ($ln['wac_price'] ?? 0);
+            $qt_items[]      = $row;
+        }
+
+        return $qt_items;
     }
 
     public function get_summary_counts($filters = [])

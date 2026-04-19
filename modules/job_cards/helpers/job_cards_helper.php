@@ -385,6 +385,226 @@ function jc_format_mwk($amount)
     return 'MWK ' . number_format((float) $amount, 2, '.', ',');
 }
 
+/**
+ * Map an Approvals "quotation" document_id to a Perfex proposal id.
+ * document_id is either tblproposals.id (proposal-sent / legacy path) or
+ * tblipms_quotations.id (Quotations module submit_for_approval path).
+ *
+ * @param int $document_id
+ * @return int proposal id or 0 if not resolvable
+ */
+function jc_resolve_proposal_id_from_quotation_approval($document_id)
+{
+    $document_id = (int) $document_id;
+    if ($document_id < 1) {
+        return 0;
+    }
+
+    $CI = &get_instance();
+    $p  = db_prefix();
+
+    // Proposal-sent / legacy approvals: document_id is tblproposals.id
+    $CI->db->where('id', $document_id);
+    if ($CI->db->count_all_results($p . 'proposals') > 0) {
+        return $document_id;
+    }
+
+    $qtTable = $p . 'ipms_quotations';
+    if ($CI->db->table_exists($qtTable)) {
+        $CI->db->where('id', $document_id);
+        $quotation = $CI->db->get($qtTable)->row();
+        if ($quotation) {
+            $estimateId = (int) ($quotation->estimate_id ?? 0);
+            if ($estimateId > 0) {
+                $CI->db->select('id');
+                $CI->db->from($p . 'proposals');
+                $CI->db->where('estimate_id', $estimateId);
+                $CI->db->order_by('id', 'DESC');
+                $prop = $CI->db->get()->row();
+                if ($prop) {
+                    return (int) $prop->id;
+                }
+            }
+
+            if ($CI->db->field_exists('ipms_quotation_id', $p . 'estimates')) {
+                $CI->db->select('id');
+                $CI->db->from($p . 'estimates');
+                $CI->db->where('ipms_quotation_id', $document_id);
+                $CI->db->order_by('id', 'DESC');
+                $est = $CI->db->get()->row();
+                if ($est) {
+                    $eid = (int) $est->id;
+                    $CI->db->select('id');
+                    $CI->db->from($p . 'proposals');
+                    $CI->db->where('estimate_id', $eid);
+                    $CI->db->order_by('id', 'DESC');
+                    $prop = $CI->db->get()->row();
+                    if ($prop) {
+                        return (int) $prop->id;
+                    }
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * IPMS quotation linked to a proposal via tbl_estimates (estimate_id on proposal).
+ *
+ * @param object $proposal
+ * @return object|null ipms_quotations row
+ */
+function jc_get_ipms_quotation_for_proposal($proposal)
+{
+    if (!$proposal || empty($proposal->estimate_id)) {
+        return null;
+    }
+
+    $estimateId = (int) $proposal->estimate_id;
+    if ($estimateId < 1) {
+        return null;
+    }
+
+    $CI      = &get_instance();
+    $p       = db_prefix();
+    $qtTable = $p . 'ipms_quotations';
+    if (!$CI->db->table_exists($qtTable)) {
+        return null;
+    }
+
+    $qid = 0;
+    if ($CI->db->field_exists('ipms_quotation_id', $p . 'estimates')) {
+        $CI->db->select('ipms_quotation_id');
+        $CI->db->where('id', $estimateId);
+        $est = $CI->db->get($p . 'estimates')->row();
+        if ($est && (int) ($est->ipms_quotation_id ?? 0) > 0) {
+            $qid = (int) $est->ipms_quotation_id;
+        }
+    }
+
+    if ($qid > 0) {
+        $CI->db->where('id', $qid);
+
+        return $CI->db->get($qtTable)->row() ?: null;
+    }
+
+    $CI->db->where('estimate_id', $estimateId);
+    if ($CI->db->field_exists('is_latest', $qtTable)) {
+        $CI->db->where('is_latest', 1);
+    }
+    $CI->db->order_by('id', 'DESC');
+
+    return $CI->db->get($qtTable, 1)->row() ?: null;
+}
+
+/**
+ * Comma-separated tab names for jc_determine_routing from IPMS quotation lines / service_type.
+ *
+ * @param int         $quotation_id
+ * @param object|null $quotation_row
+ */
+function jc_quotation_tabs_string_for_job_card($quotation_id, $quotation_row = null)
+{
+    $quotation_id = (int) $quotation_id;
+    $CI           = &get_instance();
+    $p            = db_prefix();
+    $lines        = $p . 'ipms_quotation_lines';
+
+    if ($CI->db->table_exists($lines) && $quotation_id > 0) {
+        $row = $CI->db->query(
+            'SELECT GROUP_CONCAT(DISTINCT `tab` ORDER BY `tab` SEPARATOR ",") AS tabs FROM `' . $lines . '` WHERE `quotation_id` = ?',
+            [$quotation_id]
+        )->row();
+        if ($row && !empty($row->tabs)) {
+            return (string) $row->tabs;
+        }
+    }
+
+    if ($quotation_row && isset($quotation_row->service_type) && (string) $quotation_row->service_type !== '') {
+        return (string) $quotation_row->service_type;
+    }
+
+    return '';
+}
+
+/**
+ * @param object $proposal
+ * @return object|null worksheet-like object (service_tabs, total_cost, total_sell, grand_total)
+ */
+function jc_resolve_worksheet_for_auto_job_card($proposal_id, $proposal)
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+
+    $CI->db->from($p . 'ipms_qt_worksheets');
+    $CI->db->where('proposal_id', (int) $proposal_id);
+    $ws = $CI->db->get()->row();
+
+    if (!$ws) {
+        $helper = module_dir_path('quotation_worksheet', 'helpers/quotation_worksheet_helper.php');
+        if (is_file($helper)) {
+            require_once $helper;
+        }
+        if (function_exists('qt_get_or_create_worksheet')) {
+            qt_get_or_create_worksheet((int) $proposal_id);
+            $CI->db->from($p . 'ipms_qt_worksheets');
+            $CI->db->where('proposal_id', (int) $proposal_id);
+            $ws = $CI->db->get()->row();
+        }
+    }
+
+    if ($ws) {
+        return $ws;
+    }
+
+    $q = jc_get_ipms_quotation_for_proposal($proposal);
+    if (!$q) {
+        return null;
+    }
+
+    $tabs = jc_quotation_tabs_string_for_job_card((int) $q->id, $q);
+
+    return (object) [
+        'service_tabs' => $tabs,
+        'total_cost'   => isset($q->total_cost) ? (float) $q->total_cost : 0.0,
+        'total_sell'   => isset($q->total_sell) ? (float) $q->total_sell : 0.0,
+        'grand_total'  => isset($q->grand_total) ? (float) $q->grand_total : 0.0,
+    ];
+}
+
+/**
+ * Fill empty worksheet totals/tabs from linked ipms_quotations when present.
+ *
+ * @param object      $worksheet (modified in place)
+ * @param object      $proposal
+ * @param object|null $quotation optional pre-fetched row
+ */
+function jc_enrich_worksheet_from_ipms_quotation($worksheet, $proposal, $quotation = null)
+{
+    if (!$worksheet || !$proposal) {
+        return;
+    }
+
+    $q = $quotation ?: jc_get_ipms_quotation_for_proposal($proposal);
+    if (!$q) {
+        return;
+    }
+
+    if (trim((string) ($worksheet->service_tabs ?? '')) === '') {
+        $worksheet->service_tabs = jc_quotation_tabs_string_for_job_card((int) $q->id, $q);
+    }
+
+    $gtWs = (float) ($worksheet->grand_total ?? 0);
+    $gtQ  = (float) ($q->grand_total ?? 0);
+    if ($gtWs <= 0 && $gtQ > 0) {
+        $worksheet->total_cost  = (float) ($q->total_cost ?? 0);
+        $worksheet->total_sell  = (float) ($q->total_sell ?? 0);
+        $worksheet->grand_total = $gtQ;
+    }
+}
+
 function jc_auto_create_from_proposal($proposal_id)
 {
     $CI          = &get_instance();
@@ -402,14 +622,15 @@ function jc_auto_create_from_proposal($proposal_id)
         return false;
     }
 
-    $CI->db->from(db_prefix() . 'ipms_qt_worksheets');
-    $CI->db->where('proposal_id', $proposal_id);
-    $worksheet = $CI->db->get()->row();
+    $worksheet = jc_resolve_worksheet_for_auto_job_card($proposal_id, $proposal);
     if (!$worksheet) {
-        log_message('error', 'jc_auto_create_from_proposal: no worksheet for proposal ' . $proposal_id);
+        log_message('error', 'jc_auto_create_from_proposal: no worksheet or IPMS quotation for proposal ' . $proposal_id);
 
         return false;
     }
+
+    $qLinked = jc_get_ipms_quotation_for_proposal($proposal);
+    jc_enrich_worksheet_from_ipms_quotation($worksheet, $proposal, $qLinked);
 
     $CI->db->from(db_prefix() . 'ipms_job_cards');
     $CI->db->where('proposal_id', $proposal_id);
@@ -426,10 +647,14 @@ function jc_auto_create_from_proposal($proposal_id)
     $serviceTabs = (string) $worksheet->service_tabs;
     $routing     = jc_determine_routing($serviceTabs);
 
+    $qtRef = isset($proposal->qt_ref) && (string) $proposal->qt_ref !== ''
+        ? (string) $proposal->qt_ref
+        : ($qLinked && !empty($qLinked->quotation_ref) ? (string) $qLinked->quotation_ref : '');
+
     $data = [
         'jc_ref'             => $jc_ref,
         'proposal_id'        => $proposal_id,
-        'qt_ref'             => isset($proposal->qt_ref) ? $proposal->qt_ref : '',
+        'qt_ref'             => $qtRef,
         'client_id'          => $client_id,
         'created_by'         => 0,
         'assigned_sales_id'  => isset($proposal->assigned) ? (int) $proposal->assigned : 0,
@@ -468,7 +693,7 @@ function jc_auto_create_from_proposal($proposal_id)
         'changed_by'      => 0,
         'changed_by_name' => 'System (Auto-created from approval)',
         'changed_by_role' => '',
-        'notes'           => 'Auto-created when quotation ' . (isset($proposal->qt_ref) ? $proposal->qt_ref : '') . ' was approved',
+        'notes'           => 'Auto-created when quotation ' . $qtRef . ' was approved',
         'changed_at'      => date('Y-m-d H:i:s'),
     ]);
 
@@ -483,7 +708,7 @@ function jc_auto_create_from_proposal($proposal_id)
 
     if (isset($proposal->assigned) && (int) $proposal->assigned > 0) {
         add_notification([
-            'description' => 'Job Card ' . $jc_ref . ' created for your proposal ' . (isset($proposal->qt_ref) ? $proposal->qt_ref : $proposal_id),
+            'description' => 'Job Card ' . $jc_ref . ' created for your proposal ' . ($qtRef !== '' ? $qtRef : (string) $proposal_id),
             'touserid'    => (int) $proposal->assigned,
             'fromuserid'  => 0,
             'link'        => 'job_cards/view/' . $jc_id,

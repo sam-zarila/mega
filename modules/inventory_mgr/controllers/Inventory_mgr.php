@@ -732,32 +732,8 @@ class Inventory_mgr extends AdminController
             show_404();
         }
 
-        $idCol = 'commodity_id';
-        if (!$this->db->field_exists('commodity_id', $p . 'ipms_qt_lines') && $this->db->field_exists('inventory_item_id', $p . 'ipms_qt_lines')) {
-            $idCol = 'inventory_item_id';
-        }
-
-        $this->db->where('proposal_id', (int) $jc->proposal_id);
-        $this->db->order_by('line_order', 'ASC');
-        $this->db->order_by('id', 'ASC');
-        $qtLines = $this->db->get($p . 'ipms_qt_lines')->result();
-
-        $qt_items = [];
-        foreach ($qtLines as $ql) {
-            $itemId = (int) ($ql->{$idCol} ?? 0);
-            $item   = $itemId > 0 ? inv_mgr_get_item($itemId) : null;
-            $row    = new stdClass();
-            $row->qt_line_id         = (int) ($ql->id ?? 0);
-            $row->inventory_item_id  = $itemId > 0 ? $itemId : null;
-            $row->commodity_code     = $item ? (string) ($item->commodity_code ?? '') : (string) ($ql->item_code ?? '');
-            $row->item_name          = $item ? (string) ($item->description ?? '') : (string) ($ql->description ?? '');
-            $row->unit_symbol        = $item && isset($item->unit_symbol) && (string) $item->unit_symbol !== ''
-                ? (string) $item->unit_symbol
-                : (string) ($ql->unit ?? '');
-            $row->quoted_qty = (float) ($ql->quantity ?? 0);
-            $row->wac        = $itemId > 0 ? inv_mgr_get_wac($itemId) : 0.0;
-            $qt_items[]      = $row;
-        }
+        $this->load->model('job_cards/job_cards_model');
+        $qt_items = $this->job_cards_model->get_qt_items_for_inventory_issue((int) $jc->proposal_id);
 
         $clientName = '';
         if (function_exists('jc_get_client_name')) {
