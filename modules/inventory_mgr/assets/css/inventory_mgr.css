@@ -57,6 +57,17 @@
 /* GRN WAC preview cell */
 .grn-wac-preview { font-size: 12px; font-family: monospace; }
 
+/* GRN item search: menu above Perfex panels; “no match” row from InvMgr.grnForm */
+.ui-autocomplete {
+  z-index: 20000 !important;
+  max-width: 520px;
+}
+.inv-mgr-ac-nomatch {
+  font-style: italic;
+  font-size: 12px;
+  pointer-events: none;
+}
+
 /* GRN form (used with InvMgr.grnForm) */
 .grn-row .grn-wac-preview .text-success { color: #28a745; }
 .grn-row .grn-wac-preview .text-warning { color: #f0ad4e; }

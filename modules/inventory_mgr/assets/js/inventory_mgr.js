@@ -478,7 +478,10 @@ InvMgr.grnForm = {
 
   bindItemSearch: function () {
     var self = this;
-    if (!$.fn.autocomplete) return;
+    if (!$.fn.autocomplete) {
+      console.error('InvMgr GRN: jQuery UI autocomplete is not loaded; load jquery-ui.js on admin pages that use item search.');
+      return;
+    }
     $('#grn-item-search').autocomplete({
       minLength: 2,
       source: function (req, res) {
@@ -491,8 +494,22 @@ InvMgr.grnForm = {
           admin_url + 'inventory_mgr/search_items_ajax',
           { term: req.term, warehouse_id: wh, with_stock: 1 },
           function (data) {
+            var rows = data || [];
+            if (rows.length === 0) {
+              res([
+                {
+                  label:
+                    'No items match "' +
+                    req.term +
+                    '". Use text from item code or description (Inventory → Items).',
+                  value: '',
+                  invMgrNoMatch: true,
+                },
+              ]);
+              return;
+            }
             res(
-              $.map(data || [], function (item) {
+              $.map(rows, function (item) {
                 return {
                   label: (item.commodity_code || '') + ' — ' + (item.description || ''),
                   value: '',
@@ -501,9 +518,23 @@ InvMgr.grnForm = {
               })
             );
           }
-        );
+        ).fail(function () {
+          res([
+            {
+              label: 'Search failed — check you are logged in and try again.',
+              value: '',
+              invMgrNoMatch: true,
+            },
+          ]);
+          if (typeof alert_float === 'function') {
+            alert_float('danger', 'Item search request failed.');
+          }
+        });
       },
       select: function (e, ui) {
+        if (ui.item.invMgrNoMatch) {
+          return false;
+        }
         var wh = $('select[name="warehouse_id"]').val();
         if (!wh) {
           alert_float('warning', 'Select receiving warehouse first.');
@@ -517,7 +548,11 @@ InvMgr.grnForm = {
     var ac = $('#grn-item-search').data('ui-autocomplete');
     if (ac) {
       ac._renderItem = function (ul, item) {
-        return $('<li>').append($('<div>').text(item.label)).appendTo(ul);
+        var $li = $('<li>').append($('<div>').text(item.label));
+        if (item.invMgrNoMatch) {
+          $li.addClass('inv-mgr-ac-nomatch text-muted');
+        }
+        return $li.appendTo(ul);
       };
     }
   },

@@ -70,6 +70,10 @@ init_head();
                 </div>
 
                 <h5 class="mtop20">Items to Receive</h5>
+                <p class="text-muted mbot15">
+                    Rows appear here after you choose a match from the <strong>search box below</strong> (not from typing directly in the table).
+                    Order: set <strong>Receiving Warehouse</strong> above first, then search by code or name, then enter quantity and cost on each line.
+                </p>
                 <div class="table-responsive">
                     <table id="grn-items-table" class="table table-bordered">
                         <thead>
@@ -89,7 +93,7 @@ init_head();
                         <tbody id="grn-items-body">
                             <tr class="grn-empty-row">
                                 <td colspan="10" class="text-center text-muted" style="padding:20px">
-                                    <i class="fa fa-arrow-down"></i> Search for items below; pick a suggestion to add a line
+                                    <i class="fa fa-arrow-down"></i> No lines yet — use the search field <strong>under this table</strong>, pick an item, then fill Qty and Unit Price on the new row.
                                 </td>
                             </tr>
                         </tbody>
@@ -104,8 +108,9 @@ init_head();
                 </div>
 
                 <div class="well mtop20">
-                    <label class="control-label">Search by item code or name…</label>
-                    <input type="text" id="grn-item-search" class="form-control" placeholder="Type at least 2 characters, then choose a match" autocomplete="off">
+                    <label class="control-label">Add a line — search by item code or name</label>
+                    <p class="text-muted small mtop5 mbot10">Requires a warehouse selected above. Type 2+ characters, click a result to add one row; repeat for more items.</p>
+                    <input type="text" id="grn-item-search" class="form-control" placeholder="Type at least 2 characters, then choose a match from the list" autocomplete="off">
                 </div>
 
                 <div class="mtop20">

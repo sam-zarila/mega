@@ -116,6 +116,10 @@ function inv_mgr_add_head_assets()
 
     $href = module_dir_url(INV_MGR_MODULE_NAME, 'assets/css/inventory_mgr.css?v=' . rawurlencode(INV_MGR_VERSION));
     echo '<link rel="stylesheet" href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+
+    // GRN / issue forms use jQuery UI autocomplete; it is not part of the default admin script bundle.
+    $jqueryUiCss = base_url('assets/plugins/jquery-ui/jquery-ui.css');
+    echo '<link rel="stylesheet" href="' . htmlspecialchars($jqueryUiCss, ENT_QUOTES, 'UTF-8') . '">' . "\n";
 }
 
 function inv_mgr_add_footer_assets()
@@ -123,6 +127,9 @@ function inv_mgr_add_footer_assets()
     if (!inv_mgr_is_inventory_mgr_page()) {
         return;
     }
+
+    $jqueryUiJs = base_url('assets/plugins/jquery-ui/jquery-ui.js');
+    echo '<script src="' . htmlspecialchars($jqueryUiJs, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 
     $src = module_dir_url(INV_MGR_MODULE_NAME, 'assets/js/inventory_mgr.js?v=' . rawurlencode(INV_MGR_VERSION));
     echo '<script src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
