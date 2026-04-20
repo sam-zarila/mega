@@ -445,6 +445,57 @@ function inv_mgr_get_item($item_id)
 }
 
 /**
+ * When a proposal line has no item_id, try to match a single active inventory row
+ * by exact case-insensitive description / commodity_name / long_description / commodity_code.
+ *
+ * @param string $text Proposal line description or catalogue label
+ * @return int tblitems.id or 0 if ambiguous / none
+ */
+function inv_mgr_resolve_item_id_by_line_text($text)
+{
+    $text = trim(preg_replace('/\s+/u', ' ', (string) $text));
+    if ($text === '') {
+        return 0;
+    }
+
+    $norm = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
+
+    $CI     = &get_instance();
+    $p      = db_prefix();
+    $itemsT = $p . 'items';
+    if (!$CI->db->table_exists($itemsT)) {
+        return 0;
+    }
+
+    $esc       = $CI->db->escape($norm);
+    $activeSql = $CI->db->field_exists('active', $itemsT) ? '`active` = 1 AND ' : '';
+
+    $parts = ['(LOWER(TRIM(COALESCE(description, ""))) = ' . $esc . ')'];
+    if ($CI->db->field_exists('commodity_name', $itemsT)) {
+        $parts[] = '(LOWER(TRIM(COALESCE(commodity_name, ""))) = ' . $esc . ')';
+    }
+    if ($CI->db->field_exists('long_description', $itemsT)) {
+        $parts[] = '(LOWER(TRIM(COALESCE(long_description, ""))) = ' . $esc . ')';
+    }
+
+    $sql = 'SELECT `id` FROM `' . $itemsT . '` WHERE ' . $activeSql . '(' . implode(' OR ', $parts) . ') LIMIT 2';
+    $rows = $CI->db->query($sql)->result();
+    if (count($rows) === 1) {
+        return (int) $rows[0]->id;
+    }
+
+    if ($CI->db->field_exists('commodity_code', $itemsT)) {
+        $sql = 'SELECT `id` FROM `' . $itemsT . '` WHERE ' . $activeSql . 'LOWER(TRIM(COALESCE(commodity_code, ""))) = ' . $esc . ' LIMIT 2';
+        $rows = $CI->db->query($sql)->result();
+        if (count($rows) === 1) {
+            return (int) $rows[0]->id;
+        }
+    }
+
+    return 0;
+}
+
+/**
  * @param string    $term
  * @param int|null  $warehouse_id
  * @param bool      $with_stock
@@ -474,6 +525,12 @@ function inv_mgr_search_items($term, $warehouse_id = null, $with_stock = false)
     $CI->db->like('i.description', $term);
     if ($hasCode) {
         $CI->db->or_like('i.commodity_code', $term);
+    }
+    if ($CI->db->field_exists('commodity_name', $itemsT)) {
+        $CI->db->or_like('i.commodity_name', $term);
+    }
+    if ($CI->db->field_exists('long_description', $itemsT)) {
+        $CI->db->or_like('i.long_description', $term);
     }
     $CI->db->group_end();
 

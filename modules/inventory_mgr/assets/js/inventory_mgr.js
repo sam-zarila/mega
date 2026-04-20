@@ -12,6 +12,7 @@ InvMgr.issueForm = {
     this.bindQtyInputs();
     this.bindValidateBtn();
     this.bindExtraItemSearch();
+    this.bindQtLineMapSearch();
     this.bindCheckboxes();
     this.bindFormSubmit();
     this.recalcTotals();
@@ -48,7 +49,7 @@ InvMgr.issueForm = {
   loadAllStockLevels: function (warehouse_id) {
     if (!warehouse_id) return;
     $('#qt-items-table tr.qt-item-row[data-item-id]').each(function () {
-      var item_id = $(this).data('item-id');
+      var item_id = parseInt($(this).attr('data-item-id'), 10) || 0;
       if (!item_id) return;
       var $row = $(this);
       var $cell = $row.find('.stock-available-cell');
@@ -123,21 +124,22 @@ InvMgr.issueForm = {
   recalcRow: function ($row) {
     var $cb = $row.find('.qt-check');
     var qty = 0;
+    var $qi = $row.find('.qty-input').not(':disabled');
     if ($cb.length && !$cb.is(':checked')) {
       qty = 0;
     } else {
-      qty = parseFloat($row.find('.qty-input').val()) || 0;
+      qty = parseFloat($qi.val()) || 0;
     }
-    var wac = parseFloat($row.find('.qty-input').data('wac')) || 0;
+    var wac = parseFloat($qi.data('wac')) || 0;
     var cost = qty * wac;
     $row.find('.issue-cost').text(
       cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
-    var available = parseFloat($row.find('.qty-input').data('max-available')) || 0;
+    var available = parseFloat($qi.data('max-available')) || 0;
     if (available > 0 && qty > available) {
-      $row.find('.qty-input').addClass('input-danger');
+      $qi.addClass('input-danger');
     } else {
-      $row.find('.qty-input').removeClass('input-danger');
+      $qi.removeClass('input-danger');
     }
     this.recalcTotals();
   },
@@ -192,6 +194,9 @@ InvMgr.issueForm = {
       }
       var lines = [];
       $('.qty-input').each(function () {
+        if ($(this).prop('disabled')) {
+          return;
+        }
         var $row = $(this).closest('tr');
         if ($row.find('.qt-check').length && !$row.find('.qt-check').is(':checked')) {
           return;
@@ -340,6 +345,106 @@ InvMgr.issueForm = {
       $(this).closest('tr').remove();
       self.invalidateValidation();
       InvMgr.issueForm.recalcTotals();
+    });
+  },
+
+  bindQtLineMapSearch: function () {
+    var self = this;
+    $(document).on('focus', '.qt-line-map-search', function () {
+      var $input = $(this);
+      if ($input.data('ac-init')) return;
+      $input.data('ac-init', true).autocomplete({
+        source: function (req, res) {
+          var wh_id = $('input[name="warehouse_id"]:checked').val();
+          if (!wh_id) {
+            res([]);
+            return;
+          }
+          $.get(
+            admin_url + 'inventory_mgr/search_items_ajax',
+            { term: req.term, warehouse_id: wh_id, with_stock: 0 },
+            function (data) {
+              var mapped = $.map(data || [], function (item) {
+                return {
+                  label: (item.commodity_code || '') + ' — ' + (item.description || ''),
+                  value: item.description || '',
+                  data: item,
+                };
+              });
+              res(mapped);
+            },
+            'json'
+          );
+        },
+        minLength: 2,
+        select: function (e, ui) {
+          var d = ui.item.data;
+          var $tr = $input.closest('tr');
+          $tr.find('.qt-mapped-item-id').val(d.id);
+          $tr.removeClass('qt-unmapped-row').addClass('qt-mapped-linked');
+          $tr.attr('data-item-id', d.id).removeData('item-id');
+          $tr.find('.qt-code-cell').text(d.commodity_code || '—');
+          $tr.find('.qt-unit-cell').text(d.unit_symbol || '');
+          var $qty = $tr.find('.qt-map-qty');
+          $qty.prop('disabled', false)
+            .addClass('qty-input')
+            .attr('data-item', d.id)
+            .data('max-default', $qty.val() || $qty.data('max-default') || 0);
+          $tr.find('.qt-unmapped-cb-slot').html(
+            '<input type="checkbox" class="qt-check" checked title="Include in issue">'
+          );
+          $tr.find('.qt-cost-placeholder').html(
+            '<strong>MWK <span class="issue-cost">0.00</span></strong>'
+          );
+          self.invalidateValidation();
+          var wh = $('input[name="warehouse_id"]:checked').val();
+          if (wh) {
+            var $cell = $tr.find('.stock-available-cell');
+            $cell.html('<i class="fa fa-refresh fa-spin"></i>');
+            $.get(
+              admin_url + 'inventory_mgr/get_item_info',
+              { item_id: d.id, warehouse_id: wh },
+              function (res) {
+                var qty = parseFloat(res.stock_qty) || 0;
+                var required = parseFloat($qty.data('max-default')) || 0;
+                var ok = qty >= required;
+                var html =
+                  '<span class="' +
+                  (ok ? 'text-success' : 'text-danger') +
+                  ' stock-qty-display" data-stock="' +
+                  qty +
+                  '">' +
+                  qty.toFixed(3) +
+                  '</span>';
+                if (!ok && required > 0) {
+                  html += ' <span class="label label-danger low-stock-badge">LOW</span>';
+                }
+                $cell.html(html);
+                $qty.data('max-available', qty);
+                $qty.data('wac', res.wac);
+                $tr.find('.qt-wac-cell .item-wac').text(
+                  'MWK ' +
+                    parseFloat(res.wac).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                );
+                InvMgr.issueForm.recalcRow($tr);
+              },
+              'json'
+            );
+          } else {
+            InvMgr.issueForm.recalcRow($tr);
+          }
+          return false;
+        },
+      });
+      var ac = $input.data('ui-autocomplete');
+      if (ac) {
+        ac._renderItem = function (ul, item) {
+          return $('<li>').append($('<div>').text(item.label)).appendTo(ul);
+        };
+      }
     });
   },
 

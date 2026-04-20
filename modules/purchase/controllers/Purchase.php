@@ -10,7 +10,16 @@ class purchase extends AdminController
     {
         parent::__construct();
         $this->load->model('purchase_model');
-        require_once module_dir_path(PURCHASE_MODULE_NAME) . '/third_party/excel/PHPExcel.php';
+    }
+
+    /**
+     * PHPExcel is legacy and heavy; load only when importing Excel (PHP 8+ also needs patched vendor files).
+     */
+    protected function purchase_load_phpexcel()
+    {
+        if (!class_exists('PHPExcel', false)) {
+            require_once module_dir_path(PURCHASE_MODULE_NAME) . '/third_party/excel/PHPExcel.php';
+        }
     }
 
     public function index(){
@@ -4093,6 +4102,8 @@ class purchase extends AdminController
         if (!is_admin() && !has_permission('purchase', '', 'create')) {
             access_denied(_l('purchase'));
         }
+
+        $this->purchase_load_phpexcel();
 
         $total_row_false = 0;
         $total_rows_data = 0;

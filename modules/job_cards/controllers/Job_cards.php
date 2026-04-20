@@ -480,9 +480,13 @@ class Job_cards extends AdminController
 
         $p = db_prefix();
         $client = $this->db->where('userid', (int) $jobCard->client_id)->get($p . 'clients')->row();
-        $proposal = $this->db->where('id', (int) $jobCard->proposal_id)->get($p . 'proposals')->row();
-        $worksheet = $this->db->where('proposal_id', (int) $jobCard->proposal_id)->get($p . 'ipms_qt_worksheets')->row();
-        $lines = $this->db->where('proposal_id', (int) $jobCard->proposal_id)->order_by('tab', 'ASC')->order_by('id', 'ASC')->get($p . 'ipms_qt_lines')->result_array();
+        $proposal = (int) $jobCard->proposal_id > 0
+            ? $this->db->where('id', (int) $jobCard->proposal_id)->get($p . 'proposals')->row()
+            : null;
+        $worksheet = (int) $jobCard->proposal_id > 0
+            ? $this->db->where('proposal_id', (int) $jobCard->proposal_id)->get($p . 'ipms_qt_worksheets')->row()
+            : null;
+        $lines = isset($jobCard->qt_lines) && is_array($jobCard->qt_lines) ? $jobCard->qt_lines : [];
         $settingsRows = $this->db->get($p . 'ipms_jc_settings')->result_array();
 
         $settings = [];
@@ -511,7 +515,15 @@ class Job_cards extends AdminController
             $grouped[$tab][] = $line;
         }
 
-        require_once APPPATH . 'third_party/mPDF/vendor/autoload.php';
+        $composerAutoload = APPPATH . 'vendor/autoload.php';
+        if (!is_file($composerAutoload)) {
+            show_error('Composer autoload is missing. Run composer install in the application folder to enable PDF export.', 500);
+        }
+        require_once $composerAutoload;
+        if (!class_exists(\Mpdf\Mpdf::class)) {
+            show_error('mPDF is not installed (expected package mpdf/mpdf). Run: composer require mpdf/mpdf', 500);
+        }
+
         $mpdf = new \Mpdf\Mpdf([
             'mode'          => 'utf-8',
             'format'        => 'A4',

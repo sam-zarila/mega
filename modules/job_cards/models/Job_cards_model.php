@@ -35,13 +35,15 @@ class Job_cards_model extends App_Model
                 return false;
             }
 
+            $this->attach_effective_proposal_context($jc);
+
             $jc->department_assignments = $this->get_department_assignments((int) $id);
             $jc->status_log             = $this->get_status_log((int) $id);
             $jc->material_issues        = $this->get_material_issues((int) $id);
-            $jc->qt_lines               = $this->db
-                ->where('proposal_id', (int) $jc->proposal_id)
-                ->get($p . 'ipms_qt_lines')
-                ->result_array();
+            $proposalId                 = (int) $jc->proposal_id;
+            $jc->qt_lines               = $proposalId > 0
+                ? $this->normalize_qt_lines_for_job_card_display($this->get_qt_lines_for_job($proposalId))
+                : [];
 
             return $jc;
         }
@@ -106,6 +108,70 @@ class Job_cards_model extends App_Model
         $this->db->order_by('i.issued_at', 'DESC');
 
         return $this->db->get()->result_array();
+    }
+
+    /**
+     * When a job card was created manually with proposal_id = 0, resolve the proposal from proposals.jc_id.
+     * Mutates the row in memory only (does not UPDATE the database).
+     *
+     * @param object $jc
+     */
+    public function attach_effective_proposal_context($jc)
+    {
+        if (!$jc || (int) ($jc->proposal_id ?? 0) > 0) {
+            return;
+        }
+
+        $p  = db_prefix();
+        $pr = $this->db->where('jc_id', (int) ($jc->id ?? 0))->get($p . 'proposals')->row();
+        if (!$pr) {
+            return;
+        }
+
+        $jc->proposal_id = (int) $pr->id;
+        if (empty($jc->qt_ref) && !empty($pr->qt_ref)) {
+            $jc->qt_ref = (string) $pr->qt_ref;
+        } elseif (empty($jc->qt_ref) && function_exists('format_proposal_number')) {
+            $jc->qt_ref = format_proposal_number((int) $pr->id);
+        }
+        $jc->proposal_subject = (string) ($pr->subject ?? '');
+        if (isset($pr->qt_ref)) {
+            $jc->proposal_qt_ref = (string) $pr->qt_ref;
+        }
+    }
+
+    /**
+     * Normalizes mixed quotation / proposal-itemable rows for the job card view (tabs, sell totals).
+     *
+     * @param array<int, array<string, mixed>> $lines
+     * @return array<int, array<string, mixed>>
+     */
+    public function normalize_qt_lines_for_job_card_display(array $lines)
+    {
+        $out = [];
+        foreach ($lines as $ln) {
+            if (!is_array($ln)) {
+                continue;
+            }
+            $qty = isset($ln['quantity']) ? (float) $ln['quantity'] : (float) ($ln['qty'] ?? 0);
+            $rate = isset($ln['sell_price']) ? (float) $ln['sell_price'] : (float) ($ln['rate'] ?? 0);
+            if ($rate <= 0 && isset($ln['line_total_sell']) && $qty > 0) {
+                $rate = (float) $ln['line_total_sell'] / $qty;
+            }
+            $lineTotal = isset($ln['line_total_sell']) ? (float) $ln['line_total_sell'] : ($qty * $rate);
+            $tab       = isset($ln['tab']) && (string) $ln['tab'] !== '' ? (string) $ln['tab'] : 'materials';
+
+            $ln['tab']             = $tab;
+            $ln['quantity']       = $qty;
+            $ln['sell_price']     = $rate;
+            $ln['line_total_sell'] = $lineTotal;
+            if (empty($ln['unit']) && !empty($ln['unit_symbol'])) {
+                $ln['unit'] = (string) $ln['unit_symbol'];
+            }
+            $out[] = $ln;
+        }
+
+        return $out;
     }
 
     public function get_issue($issue_id)
@@ -337,7 +403,12 @@ class Job_cards_model extends App_Model
             $useCommodity    = $this->db->table_exists($commodityTable);
             $useItems        = !$useCommodity && $this->db->table_exists($itemsTable);
 
-            return $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+            $fromIpmsQt = $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+            if (!empty($fromIpmsQt)) {
+                return $fromIpmsQt;
+            }
+
+            return $this->get_qt_line_rows_from_proposal_itemable((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
         }
 
         // M03 quotation worksheet uses commodity_id; tolerate legacy column name if present.
@@ -374,7 +445,99 @@ class Job_cards_model extends App_Model
             return $lines;
         }
 
-        return $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+        $fromIpmsQt = $this->get_qt_line_rows_from_ipms_quotation((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+        if (!empty($fromIpmsQt)) {
+            return $fromIpmsQt;
+        }
+
+        return $this->get_qt_line_rows_from_proposal_itemable((int) $proposal_id, $idCol, $useCommodity, $useItems, $commodityTable, $itemsTable);
+    }
+
+    /**
+     * Perfex proposal line items (tblitemable) when no worksheet / IPMS quotation lines exist.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function get_qt_line_rows_from_proposal_itemable(
+        $proposal_id,
+        $idCol,
+        $useCommodity,
+        $useItems,
+        $commodityTable,
+        $itemsTable
+    ) {
+        $proposal_id = (int) $proposal_id;
+        if ($proposal_id < 1) {
+            return [];
+        }
+
+        if (!function_exists('get_items_by_type')) {
+            $this->load->helper('sales');
+        }
+
+        $items = get_items_by_type('proposal', $proposal_id);
+        if (empty($items)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($items as $it) {
+            if (!empty($it['is_optional']) && empty($it['is_selected'])) {
+                continue;
+            }
+
+            $invId = 0;
+            if (!empty($it['item_id'])) {
+                $invId = (int) $it['item_id'];
+            } elseif (!empty($it['itemid'])) {
+                $invId = (int) $it['itemid'];
+            }
+            if ($invId < 1 && $this->db->field_exists('commodity_id', db_prefix() . 'itemable')) {
+                $invId = (int) ($it['commodity_id'] ?? 0);
+            }
+
+            $row = [
+                'id'                         => (int) ($it['id'] ?? 0),
+                'description'                => (string) ($it['description'] ?? ''),
+                'quantity'                   => (float) ($it['qty'] ?? 0),
+                'unit'                       => (string) ($it['unit'] ?? ''),
+                'item_code'                  => '',
+                'proposal_id'                => $proposal_id,
+                'proposal_itemable_fallback' => 1,
+                'wac_price'                  => 0.0,
+                'commodity_code'             => '',
+                'commodity_name'             => '',
+            ];
+
+            if ($invId > 0 && $useCommodity && $this->db->table_exists($commodityTable)) {
+                $itm = $this->db->get_where($commodityTable, ['commodity_id' => $invId], 1)->row();
+                if ($itm) {
+                    $row['wac_price']      = (float) ($itm->wac_price ?? 0);
+                    $row['commodity_code'] = (string) ($itm->commodity_code ?? '');
+                    $row['commodity_name'] = (string) ($itm->commodity_name ?? '');
+                }
+            } elseif ($invId > 0 && $useItems && $this->db->table_exists($itemsTable)) {
+                $itm = $this->db->get_where($itemsTable, ['id' => $invId], 1)->row();
+                if ($itm) {
+                    $row['wac_price']       = (float) ($itm->purchase_price ?? 0);
+                    $row['commodity_code']  = (string) ($itm->commodity_code ?? '');
+                    $row['commodity_name']  = (string) ($itm->commodity_name ?? '');
+                    if ($row['description'] === '') {
+                        $row['description'] = (string) ($itm->description ?? '');
+                    }
+                }
+            }
+
+            $row['commodity_id']       = $invId;
+            $row['inventory_item_id'] = $invId > 0 ? $invId : null;
+            if ($idCol !== 'commodity_id') {
+                $row[$idCol] = $invId;
+            }
+
+            $out[] = $row;
+        }
+
+        return $out;
     }
 
     /**
@@ -481,6 +644,18 @@ class Job_cards_model extends App_Model
 
         foreach ($qtLines as $ql) {
             $itemId = (int) ($ql->{$idCol} ?? 0);
+            if ($itemId < 1 && function_exists('inv_mgr_resolve_item_id_by_line_text')) {
+                $hint = trim((string) ($ql->description ?? ''));
+                if ($hint === '' && isset($ql->item_name)) {
+                    $hint = trim((string) $ql->item_name);
+                }
+                if ($hint !== '') {
+                    $resolved = inv_mgr_resolve_item_id_by_line_text($hint);
+                    if ($resolved > 0) {
+                        $itemId = $resolved;
+                    }
+                }
+            }
             $item   = ($itemId > 0 && function_exists('inv_mgr_get_item')) ? inv_mgr_get_item($itemId) : null;
             $row    = new stdClass();
             $row->qt_line_id         = (int) ($ql->id ?? 0);
@@ -495,11 +670,18 @@ class Job_cards_model extends App_Model
             $qt_items[]      = $row;
         }
 
-        if (!empty($qt_items)) {
-            return $qt_items;
+        $linkedCount = 0;
+        foreach ($qt_items as $r) {
+            if ((int) ($r->inventory_item_id ?? 0) > 0) {
+                ++$linkedCount;
+            }
         }
 
-        return $this->build_std_qt_items_from_quotation_lines($proposal_id);
+        if (empty($qt_items) || $linkedCount === 0) {
+            return $this->build_std_qt_items_from_quotation_lines($proposal_id);
+        }
+
+        return $qt_items;
     }
 
     /**
@@ -520,6 +702,15 @@ class Job_cards_model extends App_Model
         $qt_items = [];
         foreach ($rows as $ln) {
             $itemId = (int) ($ln['commodity_id'] ?? ($ln['inventory_item_id'] ?? 0));
+            if ($itemId < 1 && function_exists('inv_mgr_resolve_item_id_by_line_text')) {
+                $hint = trim((string) ($ln['description'] ?? ($ln['commodity_name'] ?? '')));
+                if ($hint !== '') {
+                    $resolved = inv_mgr_resolve_item_id_by_line_text($hint);
+                    if ($resolved > 0) {
+                        $itemId = $resolved;
+                    }
+                }
+            }
             $item   = ($itemId > 0 && function_exists('inv_mgr_get_item')) ? inv_mgr_get_item($itemId) : null;
             $row    = new stdClass();
             $row->qt_line_id         = (int) ($ln['id'] ?? 0);

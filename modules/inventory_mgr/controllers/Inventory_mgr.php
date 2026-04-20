@@ -476,7 +476,7 @@ class Inventory_mgr extends AdminController
     {
         $this->ensure_inventory_access();
 
-        if (!$this->input->post() || $this->input->method(true) !== 'post') {
+        if (!$this->input->post() || $this->input->method(true) !== 'POST') {
             show_error('Invalid request', 405);
         }
 
@@ -733,7 +733,14 @@ class Inventory_mgr extends AdminController
         }
 
         $this->load->model('job_cards/job_cards_model');
-        $qt_items = $this->job_cards_model->get_qt_items_for_inventory_issue((int) $jc->proposal_id);
+        $this->job_cards_model->attach_effective_proposal_context($jc);
+
+        $proposalId = (int) $jc->proposal_id;
+        if ($proposalId < 1) {
+            set_alert('warning', 'This job card is not linked to a proposal. Link a proposal (or create the job card from an approved proposal) to load materials for issuing.');
+        }
+
+        $qt_items = $this->job_cards_model->get_qt_items_for_inventory_issue($proposalId);
 
         $clientName = '';
         if (function_exists('jc_get_client_name')) {
@@ -758,11 +765,15 @@ class Inventory_mgr extends AdminController
     {
         $this->ensure_inventory_access();
 
-        if (!$this->input->post() || $this->input->method(true) !== 'post') {
-            show_error('Invalid request', 405);
-        }
-
         $job_card_id = (int) $job_card_id;
+
+        // method(true) returns uppercase verb (e.g. "POST"); comparing to "post" always failed.
+        if ($this->input->method(true) !== 'POST') {
+            set_alert('warning', 'Use the Issue Materials form to confirm an issue (this page only accepts a form submission).');
+            redirect($job_card_id > 0 ? admin_url('inventory_mgr/issue_form/' . $job_card_id) : admin_url('job_cards'));
+
+            return;
+        }
         if ($job_card_id < 1) {
             show_404();
         }
@@ -1035,7 +1046,7 @@ class Inventory_mgr extends AdminController
     {
         $this->ensure_inventory_access();
 
-        if (!$this->input->post() || $this->input->method(true) !== 'post') {
+        if (!$this->input->post() || $this->input->method(true) !== 'POST') {
             show_error('Invalid request', 405);
         }
 
@@ -1053,7 +1064,7 @@ class Inventory_mgr extends AdminController
     {
         $this->ensure_inventory_access();
 
-        if (!$this->input->post() || $this->input->method(true) !== 'post') {
+        if (!$this->input->post() || $this->input->method(true) !== 'POST') {
             show_error('Invalid request', 405);
         }
 
@@ -1284,6 +1295,36 @@ class Inventory_mgr extends AdminController
                     'notes'        => '',
                 ];
             }
+        }
+
+        $qtMapped    = isset($post['qt_mapped']) && is_array($post['qt_mapped']) ? $post['qt_mapped'] : [];
+        $qtMappedQty = isset($post['qt_mapped_qty']) && is_array($post['qt_mapped_qty']) ? $post['qt_mapped_qty'] : [];
+        foreach ($qtMapped as $lineKey => $iidRaw) {
+            $iid = (int) $iidRaw;
+            if ($iid < 1) {
+                continue;
+            }
+            $qty = 0.0;
+            if (isset($qtMappedQty[$lineKey])) {
+                $qty = (float) $qtMappedQty[$lineKey];
+            }
+            $qtl = 0;
+            if (is_string($lineKey) && ctype_digit((string) $lineKey)) {
+                $qtl = (int) $lineKey;
+            } elseif (is_int($lineKey)) {
+                $qtl = $lineKey;
+            }
+
+            if ($qty <= 0) {
+                continue;
+            }
+            $merged[] = [
+                'item_id'        => $iid,
+                'qty'            => $qty,
+                'qty_required'   => null,
+                'qt_line_id'     => $qtl > 0 ? $qtl : null,
+                'notes'          => '',
+            ];
         }
 
         return $merged;

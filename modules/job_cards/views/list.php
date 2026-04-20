@@ -112,7 +112,7 @@ init_head();
                                 <thead>
                                     <tr>
                                         <th>JC Ref</th>
-                                        <th>Proposal</th>
+                                        <th>Proposal / ref.</th>
                                         <th>Client</th>
                                         <th>Job Type</th>
                                         <th>Routing</th>
@@ -166,9 +166,15 @@ init_head();
                                             </td>
                                             <td>
                                                 <?php
-                                                $label = trim($qtRef) !== '' ? $qtRef : '';
+                                                $label = '';
+                                                if ($proposalId > 0 && function_exists('format_proposal_number')) {
+                                                    $label = format_proposal_number($proposalId);
+                                                }
+                                                if (trim($qtRef) !== '') {
+                                                    $label = $label !== '' ? $label . ' · ' . $qtRef : $qtRef;
+                                                }
                                                 if ($subject !== '') {
-                                                    $label = ($label !== '' ? $label . ' - ' : '') . $subject;
+                                                    $label = $label !== '' ? $label . ' — ' . $subject : $subject;
                                                 }
                                                 if ($proposalId > 0) { ?>
                                                     <a href="<?php echo admin_url('proposals/list_proposals/' . $proposalId); ?>" target="_blank">

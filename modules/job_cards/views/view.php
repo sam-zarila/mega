@@ -39,7 +39,13 @@ init_head();
                     <i class="fa fa-clipboard"></i>
                     Job Card: <?php echo e($job_card->jc_ref); ?>
                     <?php echo jc_get_status_badge($job_card->status); ?>
-                    <small class="text-muted">Proposal: <?php echo e($job_card->qt_ref); ?></small>
+                    <small class="text-muted">Proposal:
+                        <?php if ((int) $job_card->proposal_id > 0) { ?>
+                            <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: '—'); ?></a>
+                        <?php } else { ?>
+                            <span class="text-warning">Not linked</span>
+                        <?php } ?>
+                    </small>
                 </h4>
                 <div class="pull-right mtop5 mbot10">
                     <a href="<?php echo admin_url('job_cards/pdf/' . $job_card->id); ?>" class="btn btn-default btn-sm" target="_blank">
@@ -66,7 +72,13 @@ init_head();
                     <div class="panel-body">
                         <div class="row">
                             <div class="col-md-6"><p><strong>Client:</strong> <a href="<?php echo admin_url('clients/client/' . (int) $job_card->client_id); ?>"><?php echo e($client->company ?? 'Unknown Client'); ?></a></p></div>
-                            <div class="col-md-6"><p><strong>Proposal Ref:</strong> <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref); ?></a></p></div>
+                            <div class="col-md-6"><p><strong>Proposal Ref:</strong>
+                                <?php if ((int) $job_card->proposal_id > 0) { ?>
+                                    <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: '—'); ?></a>
+                                <?php } else { ?>
+                                    <span class="text-muted">Not linked — create this job card from a proposal, or set <code>jc_id</code> on the proposal.</span>
+                                <?php } ?>
+                            </p></div>
                             <div class="col-md-6">
                                 <p><strong>Created By:</strong>
                                     <?php echo e($job_card->created_by_name ?: 'System'); ?>
@@ -169,7 +181,12 @@ init_head();
                                 </div>
                             <?php } ?>
                         </div>
-                        <p class="text-muted">Full quotation: <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>" target="_blank"><?php echo e($job_card->qt_ref); ?></a></p>
+                        <?php if (empty($tabs) && (int) $job_card->proposal_id > 0) { ?>
+                            <p class="text-muted mtop10">No line items were returned for this proposal. Add lines to the proposal (or IPMS quotation) and ensure materials use inventory item / commodity IDs where stock should be issued.</p>
+                        <?php } ?>
+                        <?php if ((int) $job_card->proposal_id > 0) { ?>
+                            <p class="text-muted">Full quotation: <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>" target="_blank"><?php echo e($job_card->qt_ref ?: 'Open proposal'); ?></a></p>
+                        <?php } ?>
                     </div>
                 </div>
 
@@ -298,10 +315,12 @@ init_head();
                                 <span class="text-warning"><i class="fa fa-exclamation-triangle"></i> Pending issue</span>
                             <?php } ?>
                         </p>
-                        <p><strong>Delivery Note:</strong><br />
+                        <p><strong>Delivery (goods out):</strong><br />
                             <?php if ((int) $job_card->delivery_note_id > 0) { ?>
-                                <a href="<?php echo admin_url('delivery_notes/view/' . (int) $job_card->delivery_note_id); ?>" target="_blank">Delivery Note #<?php echo (int) $job_card->delivery_note_id; ?></a>
-                            <?php } else { ?>Not created yet<?php } ?>
+                                <a href="<?php echo admin_url('warehouse/view_delivery/' . (int) $job_card->delivery_note_id); ?>" target="_blank">Open goods delivery #<?php echo (int) $job_card->delivery_note_id; ?></a>
+                            <?php } else { ?>
+                                Not linked yet — create under <a href="<?php echo admin_url('warehouse/goods_delivery'); ?>" target="_blank">Warehouse → Goods delivery</a> or open <a href="<?php echo admin_url('warehouse/manage_delivery'); ?>" target="_blank">Manage delivery</a>.
+                            <?php } ?>
                         </p>
                         <p><strong>Invoice:</strong><br />
                             <?php if ((int) $job_card->invoice_id > 0) { ?>

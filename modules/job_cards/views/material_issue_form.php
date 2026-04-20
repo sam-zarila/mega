@@ -37,7 +37,7 @@
 
                         <p class="text-info">
                             <i class="fa fa-info-circle"></i>
-                            Items below are pulled from the approved quotation. Verify quantities
+                            Items below are pulled from the proposal (worksheet or line items). Verify quantities
                             and enter the actual amount being issued. Items without an inventory link
                             are shown for reference only and cannot be issued here.
                         </p>

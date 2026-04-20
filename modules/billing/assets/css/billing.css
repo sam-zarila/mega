@@ -1,0 +1,189 @@
+/* IPMS Billing module */
+.billing-tab-loading {
+  padding: 20px 0;
+}
+
+/* Finance Inbox (legacy ipms-fi-* panels) */
+.ipms-fi-metric .panel-body {
+  min-height: 110px;
+}
+
+.ipms-fi-section {
+  border-radius: 3px;
+  border: 1px solid #e4e4e4;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.ipms-fi-section > .panel-heading {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.ipms-fi-section-success {
+  border-left: 4px solid #5cb85c;
+  background-color: #f6fff6;
+}
+
+.ipms-fi-section-warning {
+  border-left: 4px solid #f0ad4e;
+  background-color: #fffbf4;
+}
+
+.ipms-fi-section-danger {
+  border-left: 4px solid #d9534f;
+  background-color: #fff8f8;
+}
+
+/* Record payment summary metrics */
+.ipms-rp-metric {
+  border: 1px solid #e4e4e4;
+  border-radius: 3px;
+  padding: 12px 14px;
+  background: #fafafa;
+  min-height: 88px;
+}
+
+.ipms-rp-metric .metric-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #777;
+  margin-bottom: 6px;
+}
+
+.ipms-rp-metric .metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Payment method tiles */
+.payment-method-tile {
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.payment-method-tile:hover {
+  border-color: #007bff;
+  background: #f8fbff;
+}
+
+.payment-method-tile.selected {
+  border-color: #007bff;
+  background: #e8f4fd;
+  color: #0056b3;
+}
+
+.payment-method-tile .fa {
+  display: block;
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.payment-method-tile span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Metric cards */
+.metric-card {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+}
+
+.metric-card .metric-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.metric-card .metric-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Finance inbox sections */
+.finance-section {
+  border-left: 4px solid #28a745;
+  padding: 0;
+  margin-bottom: 24px;
+  border-radius: 0 6px 6px 0;
+}
+
+.finance-section.amber {
+  border-left-color: #fd7e14;
+}
+
+.finance-section.red {
+  border-left-color: #dc3545;
+}
+
+.finance-section .panel-heading {
+  border-radius: 0 6px 0 0;
+}
+
+/* CN pending badge */
+.cn-pending-badge {
+  background: #fd7e14;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+/* Billing info tab content */
+#billing-tab-content .info-row,
+#tab_ipms_billing .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+#billing-tab-content .info-label,
+#tab_ipms_billing .info-label {
+  color: #888;
+}
+
+#billing-tab-content .info-value,
+#tab_ipms_billing .info-value {
+  font-weight: 500;
+}
+
+/* GL posted indicator */
+.gl-posted {
+  color: #28a745;
+  font-size: 11px;
+}
+
+.gl-pending {
+  color: #fd7e14;
+  font-size: 11px;
+}
+
+/* GM approval required banner */
+#gm-approval-warning {
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%,
+  100% {
+    border-color: #ffc107;
+  }
+  50% {
+    border-color: #e0a800;
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+  }
+}

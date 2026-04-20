@@ -560,17 +560,23 @@ function jc_resolve_worksheet_for_auto_job_card($proposal_id, $proposal)
     }
 
     $q = jc_get_ipms_quotation_for_proposal($proposal);
-    if (!$q) {
-        return null;
+    if ($q) {
+        $tabs = jc_quotation_tabs_string_for_job_card((int) $q->id, $q);
+
+        return (object) [
+            'service_tabs' => $tabs,
+            'total_cost'   => isset($q->total_cost) ? (float) $q->total_cost : 0.0,
+            'total_sell'   => isset($q->total_sell) ? (float) $q->total_sell : 0.0,
+            'grand_total'  => isset($q->grand_total) ? (float) $q->grand_total : 0.0,
+        ];
     }
 
-    $tabs = jc_quotation_tabs_string_for_job_card((int) $q->id, $q);
-
+    // Proposal-only (Perfex proposal + line items / totals; no IPMS quotation module).
     return (object) [
-        'service_tabs' => $tabs,
-        'total_cost'   => isset($q->total_cost) ? (float) $q->total_cost : 0.0,
-        'total_sell'   => isset($q->total_sell) ? (float) $q->total_sell : 0.0,
-        'grand_total'  => isset($q->grand_total) ? (float) $q->grand_total : 0.0,
+        'service_tabs' => '',
+        'total_cost'   => 0.0,
+        'total_sell'   => isset($proposal->subtotal) ? (float) $proposal->subtotal : 0.0,
+        'grand_total'  => isset($proposal->total) ? (float) $proposal->total : 0.0,
     ];
 }
 
@@ -624,7 +630,7 @@ function jc_auto_create_from_proposal($proposal_id)
 
     $worksheet = jc_resolve_worksheet_for_auto_job_card($proposal_id, $proposal);
     if (!$worksheet) {
-        log_message('error', 'jc_auto_create_from_proposal: no worksheet or IPMS quotation for proposal ' . $proposal_id);
+        log_message('error', 'jc_auto_create_from_proposal: could not resolve pricing context for proposal ' . $proposal_id);
 
         return false;
     }
@@ -650,6 +656,9 @@ function jc_auto_create_from_proposal($proposal_id)
     $qtRef = isset($proposal->qt_ref) && (string) $proposal->qt_ref !== ''
         ? (string) $proposal->qt_ref
         : ($qLinked && !empty($qLinked->quotation_ref) ? (string) $qLinked->quotation_ref : '');
+    if ($qtRef === '' && function_exists('format_proposal_number')) {
+        $qtRef = format_proposal_number($proposal_id);
+    }
 
     $data = [
         'jc_ref'             => $jc_ref,

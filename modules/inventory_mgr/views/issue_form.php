@@ -65,8 +65,8 @@ init_head();
                     </div>
                 </div>
 
-                <h5 class="mtop20"><i class="fa fa-clipboard"></i> Items from Approved Quotation</h5>
-                <p class="text-muted small">These items were specified in the approved quotation.
+                <h5 class="mtop20"><i class="fa fa-clipboard"></i> Items from the proposal</h5>
+                <p class="text-muted small">Lines come from the proposal (worksheet, catalogue lines, or linked quotation if present).
                     Quantities shown are what was quoted. Adjust if actual requirement differs.</p>
 
                 <div class="table-responsive">
@@ -85,37 +85,51 @@ init_head();
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($qt_items as $item) {
+                            <?php foreach ($qt_items as $idx => $item) {
                                 $iid = isset($item->inventory_item_id) ? (int) $item->inventory_item_id : 0;
                                 $hasInv = $iid > 0;
+                                $qtLineId = (int) ($item->qt_line_id ?? 0);
+                                $mapKey   = $qtLineId > 0 ? (string) $qtLineId : ('m' . (int) $idx);
                                 ?>
-                                <tr class="qt-item-row <?php echo $hasInv ? '' : 'no-inventory'; ?>"
+                                <tr class="qt-item-row <?php echo $hasInv ? '' : 'no-inventory qt-unmapped-row'; ?>"
                                     data-item-id="<?php echo $iid; ?>"
+                                    data-line-key="<?php echo htmlspecialchars($mapKey, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-qt-line-id="<?php echo $qtLineId; ?>"
                                     data-wac="<?php echo htmlspecialchars((string) ($item->wac ?? 0), ENT_QUOTES, 'UTF-8'); ?>"
                                     data-code="<?php echo htmlspecialchars((string) ($item->commodity_code ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                     <td>
                                         <?php if ($hasInv) { ?>
                                             <input type="checkbox" name="qt_issue_items[]" value="<?php echo $iid; ?>" checked class="qt-check">
                                         <?php } else { ?>
-                                            <span title="Not linked to inventory" class="text-muted"><i class="fa fa-chain-broken"></i></span>
+                                            <span class="qt-unmapped-cb-slot" title="Link an inventory item in the next column">
+                                                <span class="text-muted"><i class="fa fa-chain-broken"></i></span>
+                                            </span>
                                         <?php } ?>
                                     </td>
-                                    <td class="text-mono small"><?php echo html_escape($item->commodity_code ?? '—'); ?></td>
+                                    <td class="text-mono small qt-code-cell"><?php echo html_escape($item->commodity_code ?? '—'); ?></td>
                                     <td>
                                         <?php echo html_escape($item->item_name ?? ''); ?>
                                         <?php if (!$hasInv) { ?>
-                                            <br><small class="text-warning">
+                                            <br><small class="text-muted">Link to stock:</small>
+                                            <input type="text"
+                                                   class="form-control input-sm qt-line-map-search mtop5"
+                                                   placeholder="Search code or description…"
+                                                   autocomplete="off">
+                                            <input type="hidden" name="qt_mapped[<?php echo htmlspecialchars($mapKey, ENT_QUOTES, 'UTF-8'); ?>]" class="qt-mapped-item-id" value="">
+                                            <small class="text-warning">
                                                 <i class="fa fa-exclamation-triangle"></i>
-                                                Not linked to inventory. Issue manually below.
+                                                Proposal line is not tied to a catalogue item — search above or add under “Additional Items”.
                                             </small>
                                         <?php } ?>
                                     </td>
-                                    <td><?php echo html_escape($item->unit_symbol ?? ''); ?></td>
+                                    <td class="qt-unit-cell"><?php echo html_escape($item->unit_symbol ?? ''); ?></td>
                                     <td class="text-center"><?php echo inv_mgr_format_qty((float) ($item->quoted_qty ?? 0)); ?></td>
                                     <td class="text-center stock-available-cell" data-item="<?php echo $iid; ?>">
                                         <?php if ($hasInv) { ?>
                                             <span class="loading-stock text-muted"><i class="fa fa-refresh fa-spin"></i> Loading…</span>
-                                        <?php } else { ?>—<?php } ?>
+                                        <?php } else { ?>
+                                            <span class="text-muted qt-stock-placeholder">—</span>
+                                        <?php } ?>
                                     </td>
                                     <td>
                                         <?php if ($hasInv) { ?>
@@ -127,21 +141,30 @@ init_head();
                                                    data-wac="<?php echo htmlspecialchars((string) ($item->wac ?? 0), ENT_QUOTES, 'UTF-8'); ?>"
                                                    data-item="<?php echo $iid; ?>">
                                             <input type="hidden" name="qt_line_id[<?php echo $iid; ?>]"
-                                                   value="<?php echo (int) ($item->qt_line_id ?? 0); ?>">
+                                                   value="<?php echo $qtLineId; ?>">
                                         <?php } else { ?>
-                                            <span class="text-muted">N/A</span>
+                                            <input type="number" step="0.001" min="0"
+                                                   name="qt_mapped_qty[<?php echo htmlspecialchars($mapKey, ENT_QUOTES, 'UTF-8'); ?>]"
+                                                   class="form-control input-sm qt-map-qty"
+                                                   disabled
+                                                   value="<?php echo htmlspecialchars((string) ($item->quoted_qty ?? 0), ENT_QUOTES, 'UTF-8'); ?>"
+                                                   data-max-default="<?php echo htmlspecialchars((string) ($item->quoted_qty ?? 0), ENT_QUOTES, 'UTF-8'); ?>"
+                                                   data-wac="0"
+                                                   data-item="0">
                                         <?php } ?>
                                     </td>
-                                    <td class="text-right">
+                                    <td class="text-right qt-wac-cell">
                                         <?php if ($hasInv) { ?>
                                             <span class="item-wac"><?php echo inv_mgr_format_mwk((float) ($item->wac ?? 0)); ?></span>
-                                        <?php } else { ?>—<?php } ?>
+                                        <?php } else { ?>
+                                            <span class="item-wac text-muted">—</span>
+                                        <?php } ?>
                                     </td>
-                                    <td class="text-right">
+                                    <td class="text-right qt-cost-cell">
                                         <?php if ($hasInv) { ?>
                                             <strong>MWK <span class="issue-cost">0.00</span></strong>
                                         <?php } else { ?>
-                                            <span class="text-muted">—</span>
+                                            <span class="text-muted qt-cost-placeholder">—</span>
                                         <?php } ?>
                                     </td>
                                 </tr>
