@@ -3287,125 +3287,132 @@ class Purchase_model extends App_Model
         $day = _d($pur_order->order_date);
        
         
-    $html = '<table class="table">
-        <tbody>
-          <tr>
-            <td rowspan="6" class="text-left" width="70%">
-            '.get_po_logo(150).'
-             <br>'.format_organization_info().'
-            </td>
-            <td class="text-right" width="30%">
-                <strong class="fsize20">'.mb_strtoupper(_l('purchase_order')).'</strong><br>
-                <strong>'.mb_strtoupper($pur_order->pur_order_number).'</strong><br>
-            </td>
-          </tr>
+    $clientName = '[CLIENT NAME]';
+    $clientEmail = '[E-MAIL]';
+    $clientPhone = '[PHONE]';
+    $clientAddress = '[ADDRESS]';
+    if (!empty($pur_order->clients)) {
+        $clientIds = array_filter(array_map('trim', explode(',', (string) $pur_order->clients)));
+        if (count($clientIds) > 0) {
+            $client = $this->clients_model->get((int) reset($clientIds));
+            if ($client) {
+                $clientName = !empty($client->company) ? $client->company : $clientName;
+                $clientEmail = !empty($client->email) ? $client->email : $clientEmail;
+                $clientPhone = !empty($client->phonenumber) ? $client->phonenumber : $clientPhone;
+                $addrParts = array_filter([
+                    (string) ($client->address ?? ''),
+                    trim(implode(', ', array_filter([(string) ($client->city ?? ''), (string) ($client->state ?? '')]))),
+                ]);
+                if (count($addrParts) > 0) {
+                    $clientAddress = implode(', ', $addrParts);
+                }
+            }
+        }
+    }
 
-          <tr>
-            <td class="text-right" width="30%">
-                <br><strong>'._l('vendor').'</strong>    
-                <br>'. $vendor_name.'
-                <br>'. $address.'
-            </td>
-            <td></td>
-          </tr>
-
-          <tr>
-            <td></td>
-          </tr>
-          <tr>
-            <td class="text-right" width="30%">
-                <br><strong>'._l('pur_ship_to').'</strong>    
-                <br>'. $ship_to.'
-            </td>
-            <td></td>
-          </tr>
-
-          <tr>
-            <td></td>
-          </tr>
-          <tr>
-            <td class="text-right">'. _l('order_date').': '. $day.'</td>
-            <td></td>
-          </tr>
-
-        </tbody>
+    $dueDate = !empty($pur_order->delivery_date) ? _d($pur_order->delivery_date) : '[MM.DD.YYYY]';
+    $orderNo = !empty($pur_order->pur_order_number) ? $pur_order->pur_order_number : '[PO0001]';
+    $taxRateLabel = !empty($pur_order->tax_order_rate) ? rtrim(rtrim(number_format((float) $pur_order->tax_order_rate, 2), '0'), '.') . '%' : '0%';
+    $html = '
+      <table class="po-head-table">
+        <tr>
+          <td class="po-brand" width="54%">
+            <div class="po-logo-wrap">'.get_po_logo(180).'</div>
+            <div class="po-org">'.format_organization_info().'</div>
+          </td>
+          <td class="po-title-block" width="46%">
+            <div class="po-title">Purchase<br>Order</div>
+          </td>
+        </tr>
       </table>
-      <br><br><br>
-      ';
 
-      $html .=  '<table class="table purorder-item">
-        <thead>
-          <tr>
-            <th class="thead-dark">'._l('items').'</th>
-            <th class="thead-dark" align="right">'._l('purchase_unit_price').'</th>
-            <th class="thead-dark" align="right">'._l('purchase_quantity').'</th>
-         
-            <th class="thead-dark" align="right">'._l('tax').'</th>
- 
-            <th class="thead-dark" align="right">'._l('discount').'</th>
-            <th class="thead-dark" align="right">'._l('total').'</th>
-          </tr>
-          </thead>
-          <tbody>';
-        $t_mn = 0;
-      foreach($pur_order_detail as $row){
+      <table class="po-meta-table">
+        <tr>
+          <td width="44%">
+            <div class="po-bill-label">Bill to</div>
+            <div class="po-bill-name">'.html_escape($clientName).'</div>
+            <div class="po-bill-line">'.html_escape($clientEmail).'</div>
+            <div class="po-bill-line">'.html_escape($clientPhone).'</div>
+            <div class="po-bill-line">'.html_escape($clientAddress).'</div>
+          </td>
+          <td width="12%"></td>
+          <td width="44%" class="po-order-meta">
+            <div><span class="po-meta-label">order no.:</span> <span class="po-meta-value">'.html_escape($orderNo).'</span></div>
+            <div><span class="po-meta-label">order date:</span> <span class="po-meta-value">'.html_escape($day).'</span></div>
+            <div><span class="po-meta-label">Due:</span> <span class="po-meta-value">'.html_escape($dueDate).'</span></div>
+          </td>
+        </tr>
+      </table>
+    ';
+
+    $html .= '<table class="po-item-table">
+      <thead>
+        <tr>
+          <th width="13%">Product Code</th>
+          <th width="14%">Category</th>
+          <th width="25%">Production Description</th>
+          <th width="9%" class="text-right">Quantity</th>
+          <th width="10%" class="text-right">C/RA</th>
+          <th width="9%" class="text-right">VAT Inc</th>
+          <th width="8%" class="text-right">VAT '.$taxRateLabel.'</th>
+          <th width="12%" class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>';
+
+    $t_mn = 0;
+    foreach ($pur_order_detail as $row) {
+        $itemCode = '';
+        $itemDesc = '';
+        $itemCategory = '';
         $items = $this->get_items_by_id($row['item_code']);
-        $units = $this->get_units_by_id($row['unit_id']);
-        $html .= '<tr nobr="true" class="sortable">
-            <td >'.$items->commodity_code.' - '.$items->description.'</td>
-            <td align="right">'.app_format_money($row['unit_price'],'').'</td>
-            <td align="right">'.$row['quantity'].'</td>
-         
-            <td align="right">'.app_format_money($row['total'] - $row['into_money'],'').'</td>
-       
-            <td align="right">'.app_format_money($row['discount_money'],'').'</td>
-            <td align="right">'.app_format_money($row['total_money'],'').'</td>
-          </tr>';
+        if ($items) {
+            $itemCode = (string) ($items->commodity_code ?? '');
+            $itemDesc = (string) ($items->description ?? '');
+            $itemCategory = (string) ($items->commodity_group ?? '');
+        }
+        if ($itemCode === '') {
+            $itemCode = (string) ($row['item_code'] ?? '—');
+        }
+        if ($itemDesc === '') {
+            $itemDesc = '—';
+        }
+        if ($itemCategory === '') {
+            $itemCategory = '—';
+        }
 
-        $t_mn += $row['total_money'];
-      }  
-      $html .=  '</tbody>
-      </table><br><br>';
+        $taxInc = (float) ($row['total'] ?? 0) - (float) ($row['into_money'] ?? 0);
+        $html .= '<tr nobr="true">
+          <td>'.html_escape($itemCode).'</td>
+          <td>'.html_escape($itemCategory).'</td>
+          <td>'.html_escape($itemDesc).'</td>
+          <td class="text-right">'.html_escape((string) ($row['quantity'] ?? 0)).'</td>
+          <td class="text-right">'.app_format_money((float) ($row['unit_price'] ?? 0), '').'</td>
+          <td class="text-right">'.app_format_money($taxInc, '').'</td>
+          <td class="text-right">'.html_escape($taxRateLabel).'</td>
+          <td class="text-right">'.app_format_money((float) ($row['total_money'] ?? 0), '').'</td>
+        </tr>';
+        $t_mn += (float) ($row['total_money'] ?? 0);
+    }
 
-      $html .= '<table class="table text-right"><tbody>';
-      if($pur_order->discount_total > 0){
-        $html .= '<tr id="subtotal">
-                    <td width="33%"></td>
-                     <td>'._l('subtotal').' </td>
-                     <td class="subtotal">
-                        '.app_format_money($t_mn,'').'
-                     </td>
-                  </tr>
-                  <tr id="subtotal">
-                  <td width="33%"></td>
-                     <td>'._l('discount(%)').'(%)'.'</td>
-                     <td class="subtotal">
-                        '.app_format_money($pur_order->discount_percent,'').' %'.'
-                     </td>
-                  </tr>
-                  <tr id="subtotal">
-                  <td width="33%"></td>
-                     <td>'._l('discount(money)').'</td>
-                     <td class="subtotal">
-                        '.app_format_money($pur_order->discount_total, '').'
-                     </td>
-                  </tr>';
-      }
-      $html .= '<tr id="subtotal">
-                 <td width="33%"></td>
-                 <td>'. _l('total').'</td>
-                 <td class="subtotal">
-                    '. app_format_money($pur_order->total, '').'
-                 </td>
-              </tr>';
+    $html .= '</tbody></table>';
 
-      $html .= ' </tbody></table>';
+    $html .= '<table class="po-footer-table">
+      <tr>
+        <td width="54%" class="po-payment-instruction">Payment instruction</td>
+        <td width="46%">
+          <table class="po-totals-table">
+            <tr><td>Subtotal, MKW:</td><td class="text-right">'.app_format_money($t_mn, '').'</td></tr>
+            <tr><td>Discount, MKW:</td><td class="text-right">'.app_format_money((float) ($pur_order->discount_total ?? 0), '').'</td></tr>
+            <tr><td>Sales Tax, MKW:</td><td class="text-right">'.app_format_money((float) ($pur_order->tax_order_amount ?? 0), '').'</td></tr>
+            <tr class="po-grand-total"><td>Total, MKW:</td><td class="text-right">'.app_format_money((float) ($pur_order->total ?? 0), '').'</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>';
 
-      $html .= '<div class="col-md-12 mtop15">
-                        <h4>'. _l('terms_and_conditions').':</h4><p>'. $pur_order->terms .'</p>
-                       
-                     </div>';
-      $html .= '<br>';
+    $html .= '<div class="po-terms">Terms and conditions apply</div>';
+    $html .= '<br>';
       $html .= '<link href="' . module_dir_url(PURCHASE_MODULE_NAME, 'assets/css/pur_order_pdf.css') .'?v=' . PURCHASE_REVISION.'"  rel="stylesheet" type="text/css" />';
       return $html;
     }

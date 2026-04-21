@@ -86,3 +86,129 @@
 .fsize20{
 	font-size: 20px;
 }
+
+.div_pdf{
+  width: 680px !important;
+  color: #1a1a1a;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 11px;
+}
+
+.po-head-table,
+.po-meta-table,
+.po-item-table,
+.po-footer-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.po-head-table td,
+.po-meta-table td,
+.po-item-table td,
+.po-item-table th,
+.po-footer-table td {
+  vertical-align: top;
+}
+
+.po-logo-wrap img {
+  max-width: 170px;
+  max-height: 58px;
+  height: auto;
+}
+
+.po-org {
+  margin-top: 8px;
+  line-height: 1.35;
+}
+
+.po-title-block {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.po-title {
+  font-size: 52px;
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.po-meta-table {
+  margin-top: 14px;
+  margin-bottom: 12px;
+}
+
+.po-bill-label {
+  margin-bottom: 2px;
+}
+
+.po-bill-name {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.po-order-meta div {
+  margin-bottom: 3px;
+}
+
+.po-meta-label {
+  display: inline-block;
+  width: 74px;
+  color: #666;
+}
+
+.po-meta-value {
+  font-weight: 600;
+}
+
+.po-item-table th {
+  background: #2e67ad;
+  color: #fff;
+  border: 1px solid #2a5c9a;
+  padding: 6px 5px;
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.po-item-table td {
+  border: 1px solid #d8dce2;
+  padding: 7px 5px;
+  background: #fff;
+}
+
+.po-item-table tbody tr:nth-child(even) td {
+  background: #f4f6fa;
+}
+
+.po-footer-table {
+  margin-top: 10px;
+}
+
+.po-payment-instruction {
+  font-weight: 600;
+  padding-top: 18px;
+}
+
+.po-totals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.po-totals-table td {
+  border: 1px solid #d8dce2;
+  padding: 4px 6px;
+  background: #f7f8fa;
+}
+
+.po-totals-table tr.po-grand-total td {
+  background: #e6f0ff;
+  font-weight: 700;
+}
+
+.po-terms {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}

@@ -400,6 +400,19 @@ if (count($tags) > 0) {
                             </div>
                         </div>
                         <?php } ?>
+                        <div class="proposal-admin-doc-head">
+                            <table class="proposal-admin-doc-head-table">
+                                <tr>
+                                    <td width="54%">
+                                        <div class="proposal-admin-doc-logo"><?= get_dark_company_logo(); ?></div>
+                                        <div class="proposal-admin-doc-org"><?= format_organization_info(); ?></div>
+                                    </td>
+                                    <td width="46%" class="proposal-admin-doc-title-wrap">
+                                        <div class="proposal-admin-doc-title">Proposal</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
                         <div class="editable proposal tc-content" id="proposal_content_area"
                             style="border:1px solid #d2d2d2;min-height:70px;border-radius:4px;">
                             <?php if (empty($proposal->content)) {
@@ -525,6 +538,18 @@ foreach ($views_activity as $activity) { ?>
 </div>
 <div id="modal-wrapper"></div>
 <?php $this->load->view('admin/proposals/send_proposal_to_email_template'); ?>
+<style>
+.proposal-admin-doc-head { margin: 12px 0; }
+.proposal-admin-doc-head-table { width: 100%; border-collapse: collapse; }
+.proposal-admin-doc-head-table td { vertical-align: top; }
+.proposal-admin-doc-logo img { max-height: 58px; width: auto; }
+.proposal-admin-doc-org { margin-top: 8px; color: #333; font-size: 12px; line-height: 1.35; }
+.proposal-admin-doc-title-wrap { text-align: center; vertical-align: middle !important; }
+.proposal-admin-doc-title { font-size: 44px; font-weight: 700; line-height: .95; letter-spacing: -.02em; color: #111; }
+#proposal_content_area table thead th { background: #2e67ad; color: #fff; border: 1px solid #2a5c9a; }
+#proposal_content_area table td, #proposal_content_area table th { border: 1px solid #d8dce2; }
+#proposal_content_area table tbody tr:nth-child(even) td { background: #f4f6fa; }
+</style>
 <script>
     init_btn_with_tooltips();
     init_datepicker();

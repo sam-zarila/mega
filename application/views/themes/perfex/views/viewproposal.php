@@ -82,7 +82,105 @@ echo $items->table();
       $items = ob_get_contents();
 ob_end_clean();
 $proposal->content = str_replace('{proposal_items}', $items, $proposal->content);
+
+$proposal_doc_header = '
+<div class="proposal-doc-head">
+  <table class="proposal-doc-head-table">
+    <tr>
+      <td width="54%">
+        <div class="proposal-doc-logo">' . get_dark_company_logo() . '</div>
+        <div class="proposal-doc-org">' . format_organization_info() . '</div>
+      </td>
+      <td width="46%" class="proposal-doc-title-wrap">
+        <div class="proposal-doc-title">Proposal</div>
+      </td>
+    </tr>
+  </table>
+  <table class="proposal-doc-meta-table">
+    <tr>
+      <td width="54%">
+        <div class="proposal-doc-meta-label">' . _l('proposal_to') . '</div>
+        <div class="proposal-doc-meta-value">' . format_proposal_info($proposal, 'html') . '</div>
+      </td>
+      <td width="46%" class="proposal-doc-date-col">
+        <div><span class="proposal-doc-k">' . _l('proposal_date') . ':</span> <span class="proposal-doc-v">' . _d($proposal->date) . '</span></div>' .
+        (!empty($proposal->open_till) ? '<div><span class="proposal-doc-k">' . _l('proposal_open_till') . ':</span> <span class="proposal-doc-v">' . _d($proposal->open_till) . '</span></div>' : '') .
+        (($proposal->project_id != '' && get_option('show_project_on_proposal') == 1) ? '<div><span class="proposal-doc-k">' . _l('project') . ':</span> <span class="proposal-doc-v">' . get_project_name_by_id($proposal->project_id) . '</span></div>' : '') .
+      '</td>
+    </tr>
+  </table>
+</div>';
+
+$proposal->content = $proposal_doc_header . $proposal->content . '<div class="proposal-doc-terms">Terms and conditions apply</div>';
 ?>
+<style>
+#proposal-wrapper .proposal-content {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+#proposal-wrapper .proposal-doc-head-table,
+#proposal-wrapper .proposal-doc-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+#proposal-wrapper .proposal-doc-head-table td,
+#proposal-wrapper .proposal-doc-meta-table td {
+  vertical-align: top;
+}
+#proposal-wrapper .proposal-doc-logo img {
+  max-height: 58px;
+  width: auto;
+}
+#proposal-wrapper .proposal-doc-org {
+  margin-top: 8px;
+  color: #333;
+  line-height: 1.35;
+  font-size: 12px;
+}
+#proposal-wrapper .proposal-doc-title-wrap { text-align: center; vertical-align: middle; }
+#proposal-wrapper .proposal-doc-title {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: .95;
+  letter-spacing: -.02em;
+  color: #111;
+}
+#proposal-wrapper .proposal-doc-meta-table { margin: 12px 0 14px; }
+#proposal-wrapper .proposal-doc-meta-label { margin-bottom: 3px; color: #555; font-size: 12px; }
+#proposal-wrapper .proposal-doc-meta-value { color: #222; font-size: 12px; line-height: 1.45; }
+#proposal-wrapper .proposal-doc-date-col div { margin-bottom: 4px; }
+#proposal-wrapper .proposal-doc-k { color: #666; min-width: 92px; display: inline-block; }
+#proposal-wrapper .proposal-doc-v { color: #222; font-weight: 600; }
+#proposal-wrapper .proposal-content table { width: 100%; border-collapse: collapse; }
+#proposal-wrapper .proposal-content table thead th {
+  background: #2e67ad;
+  color: #fff;
+  border: 1px solid #2a5c9a;
+  padding: 7px 6px;
+  font-size: 11px;
+}
+#proposal-wrapper .proposal-content table tbody td {
+  border: 1px solid #d8dce2;
+  padding: 7px 6px;
+}
+#proposal-wrapper .proposal-content table tbody tr:nth-child(even) td {
+  background: #f4f6fa;
+}
+#proposal-wrapper .proposal-content .table.text-right td {
+  background: #f7f8fa;
+}
+#proposal-wrapper .proposal-content .table.text-right tr:last-child td {
+  background: #e6f0ff;
+  font-weight: 700;
+}
+#proposal-wrapper .proposal-doc-terms {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 14px;
+}
+</style>
     <div class="mtop15 preview-top-wrapper">
         <div class="row">
             <div class="col-md-3">
