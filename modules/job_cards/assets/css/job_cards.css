@@ -168,3 +168,341 @@
   border-left: 4px solid #007bff;
   border-radius: 0 6px 6px 0;
 }
+
+/* —— Job card view: document layout (on-screen job card) —— */
+.jc-job-card-view-wrap .content {
+  background: #e9ecef;
+}
+.jc-view-toolbar {
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+.jc-view-toolbar-title {
+  margin-top: 0;
+}
+.jc-view-toolbar-actions {
+  padding-top: 4px;
+}
+
+.jc-doc-sheet {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 2px;
+  padding: 28px 32px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1a1a1a;
+}
+
+.jc-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #d9d9d9;
+  margin-bottom: 20px;
+}
+.jc-doc-header-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 62%;
+  min-width: 0;
+}
+.jc-doc-logo-img {
+  display: block;
+  max-height: 54px;
+  max-width: 240px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.jc-doc-logo-mark {
+  flex-shrink: 0;
+  width: 28px;
+  height: 26px;
+  line-height: 0;
+}
+.jc-doc-logo-svg {
+  width: 28px;
+  height: 26px;
+  max-width: 100%;
+  display: block;
+}
+.jc-doc-company-block {
+  min-width: 0;
+}
+.jc-doc-company-name {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #111;
+  margin-bottom: 6px;
+}
+.jc-doc-company-meta {
+  font-size: 11px;
+  line-height: 1.55;
+  color: #333;
+}
+.jc-doc-company-meta strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+  color: #111;
+}
+.jc-doc-company-line {
+  display: block;
+}
+
+.jc-doc-header-title {
+  text-align: right;
+  flex-shrink: 0;
+}
+.jc-doc-title-text {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.jc-doc-meta {
+  margin-bottom: 14px;
+}
+.jc-bill-to-label {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 6px;
+}
+.jc-bill-to-body {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.jc-bill-to-line {
+  margin-bottom: 4px;
+}
+.jc-bill-to-name {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.jc-bill-to-name a {
+  color: #111;
+}
+.jc-bill-to-addr {
+  white-space: pre-line;
+}
+.jc-bill-placeholder {
+  color: #999;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.jc-order-block {
+  text-align: right;
+  font-size: 12px;
+}
+.jc-order-line {
+  margin-bottom: 6px;
+}
+.jc-order-label {
+  color: #666;
+  font-weight: 400;
+  margin-right: 6px;
+}
+
+.jc-doc-extra-meta {
+  font-size: 12px;
+  padding: 12px 0 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+
+.jc-doc-section {
+  margin-top: 18px;
+}
+.jc-doc-section-hd {
+  background: #1a4a8c;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-radius: 2px 2px 0 0;
+}
+.jc-doc-section-bd {
+  border: 1px solid #d9d9d9;
+  border-top: none;
+  padding: 14px 12px;
+  border-radius: 0 0 2px 2px;
+  background: #fff;
+}
+
+.jc-doc-table {
+  margin-bottom: 0;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.jc-doc-table > thead > tr > th {
+  background: #f0f2f5;
+  border: 1px solid #d9d9d9;
+  font-weight: 600;
+  color: #222;
+  padding: 8px;
+}
+.jc-doc-table > tbody > tr > td {
+  border: 1px solid #d9d9d9;
+  padding: 8px;
+  vertical-align: middle;
+}
+.jc-doc-table > tbody > tr:nth-child(even) > td {
+  background: #f7f8fa;
+}
+.jc-doc-table-striped > tbody > tr.jc-row-alt > td {
+  background: #f7f8fa;
+}
+
+.jc-prod-table {
+  width: 100%;
+  margin-bottom: 0;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.jc-prod-table > thead > tr > th {
+  background: #1a4a8c;
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid #153d75;
+  padding: 8px 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+.jc-prod-table > tbody > tr > td {
+  border: 1px solid #d9d9d9;
+  padding: 7px 6px;
+  vertical-align: top;
+}
+.jc-prod-table > tbody > tr.jc-row-alt > td {
+  background: #f4f6f8;
+}
+.jc-col-desc {
+  min-width: 160px;
+}
+.jc-col-code {
+  width: 9%;
+}
+.jc-col-cat {
+  width: 11%;
+}
+.jc-col-qty {
+  width: 7%;
+}
+.jc-col-uom {
+  width: 6%;
+}
+.jc-col-notes {
+  width: 14%;
+}
+.jc-col-price,
+.jc-col-total {
+  width: 9%;
+  text-align: right;
+}
+.jc-prod-table > thead > tr > th.jc-col-price,
+.jc-prod-table > thead > tr > th.jc-col-total {
+  text-align: right;
+}
+
+.jc-scope-accordion {
+  margin-bottom: 0;
+}
+.jc-scope-panel {
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  margin-bottom: 10px;
+  box-shadow: none;
+}
+.jc-scope-panel-hd {
+  background: #f0f2f5;
+  padding: 0;
+}
+.jc-scope-panel-hd .panel-title {
+  font-size: 13px;
+}
+.jc-scope-panel-hd .panel-title > a {
+  display: block;
+  padding: 10px 12px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+.jc-scope-panel-bd {
+  padding: 0 !important;
+  border-top: 1px solid #d9d9d9;
+}
+
+.jc-doc-terms {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #111;
+  margin: 24px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.jc-doc-sidebar {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 2px;
+  padding: 16px 14px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.jc-doc-section-sidebar {
+  margin-top: 0;
+}
+.jc-doc-sidebar > .jc-doc-section-sidebar:first-child {
+  margin-top: 0;
+}
+.jc-doc-section-sidebar + .jc-doc-section-sidebar {
+  margin-top: 14px;
+}
+.jc-doc-section-sidebar .jc-doc-section-hd {
+  font-size: 11px;
+  padding: 7px 10px;
+}
+.jc-doc-section-sidebar .jc-doc-section-bd {
+  padding: 12px 10px;
+}
+
+.jc-job-card-view-wrap .jc-step-dot.current {
+  background: #1a4a8c;
+  border-color: #1a4a8c;
+  box-shadow: 0 0 0 3px rgba(26, 74, 140, 0.2);
+}
+
+@media (max-width: 767px) {
+  .jc-doc-sheet {
+    padding: 18px 14px;
+  }
+  .jc-order-block {
+    text-align: left;
+    margin-top: 16px;
+  }
+  .jc-doc-header {
+    flex-direction: column;
+  }
+  .jc-doc-header-title {
+    text-align: left;
+  }
+  .jc-doc-header-brand {
+    max-width: 100%;
+  }
+}

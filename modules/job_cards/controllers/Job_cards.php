@@ -499,12 +499,35 @@ class Job_cards extends AdminController
 
         $statusMeta = jc_get_status_label((int) $jobCard->status);
         $statusLabel = $statusMeta['label'];
-        $statusColor = $statusMeta['color'];
         $deadline = (string) $jobCard->deadline;
         $isOverdue = $deadline !== '' && $deadline < date('Y-m-d') && (int) $jobCard->status < 6;
         $version = $worksheet && isset($worksheet->version) ? (int) $worksheet->version : 1;
         $assignedTo = $jobCard->assigned_sales_name ?: ((int) $jobCard->assigned_sales_id > 0 ? get_staff_full_name((int) $jobCard->assigned_sales_id) : '—');
         $clientName = $client && isset($client->company) ? $client->company : 'Unknown Client';
+        $billEmail   = $client && !empty($client->email) ? (string) $client->email : '';
+        $billPhone   = $client && !empty($client->phonenumber) ? (string) $client->phonenumber : '';
+        $billAddr    = '';
+        if ($client) {
+            $billAddr = trim(implode("\n", array_filter([
+                (string) ($client->address ?? ''),
+                trim(implode(', ', array_filter([(string) ($client->city ?? ''), (string) ($client->state ?? '')]))),
+                (string) ($client->zip ?? ''),
+            ])));
+        }
+        $jcPdfFmtDate = static function ($d) {
+            if ($d === null || $d === '') {
+                return '—';
+            }
+            $t = strtotime((string) $d);
+
+            return $t ? date('m.d.Y', $t) : '—';
+        };
+        $displayCo = get_option('invoice_company_name') ?: get_option('companyname');
+        $logoFile  = (string) get_option('company_logo');
+        $logoFull  = FCPATH . 'uploads/company/' . $logoFile;
+        $pdfLogo   = ($logoFile !== '' && is_file($logoFull))
+            ? '<img src="' . html_escape($logoFull) . '" style="max-height:28px;max-width:72px;width:auto;height:auto;" />'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="26" viewBox="0 0 56 52"><path fill="#6BB3E8" d="M6 46 L6 10 L22 10 L14 46 Z"/><path fill="#4B2869" d="M18 10 L34 10 L46 46 L28 46 Z"/></svg>';
 
         $grouped = [];
         foreach ($lines as $line) {
@@ -533,79 +556,84 @@ class Job_cards extends AdminController
             'margin_bottom' => 20,
         ]);
 
-        $headerHtml = '
-        <table width="100%" style="border-bottom:1px solid #d9d9d9;padding-bottom:6px;">
-            <tr>
-                <td width="60%">
-                    <div style="font-size:14pt;font-weight:bold;">' . html_escape($companyName) . '</div>
-                    <div style="font-size:18pt;font-weight:bold;">Job Card</div>
-                </td>
-                <td width="40%" style="text-align:right;">
-                    <div style="font-size:20pt;font-weight:bold;">' . html_escape($jobCard->jc_ref) . '</div>
-                    <span style="display:inline-block;background:' . html_escape($statusColor) . ';color:#fff;padding:3px 10px;border-radius:3px;font-size:10pt;">' . html_escape($statusLabel) . '</span>
-                </td>
-            </tr>
-        </table>';
+        $headerHtml = '<table width="100%" style="border-bottom:1px solid #ddd;padding-bottom:4px;font-size:8pt;color:#555;"><tr>'
+            . '<td>' . html_escape($jobCard->jc_ref) . '</td>'
+            . '<td style="text-align:right;">' . html_escape($statusLabel) . '</td></tr></table>';
         $mpdf->SetHTMLHeader($headerHtml);
 
-        $footerHtml = '
-        <table width="100%" style="font-size:9pt;color:#666;">
-            <tr>
-                <td width="40%">MW — Internal Production Document — Confidential</td>
-                <td width="20%" style="text-align:center;">Page {PAGENO} of {nbpg}</td>
-                <td width="40%" style="text-align:right;">' . html_escape($jobCard->jc_ref) . ' | Printed ' . date('Y-m-d H:i') . '</td>
-            </tr>
-        </table>';
+        $footerHtml = '<table width="100%" style="font-size:8pt;color:#444;border-top:1px solid #ccc;padding-top:5px;margin-top:4px;">'
+            . '<tr><td style="text-align:center;"><strong>Terms and conditions apply</strong></td></tr>'
+            . '<tr><td style="text-align:center;padding-top:3px;">Page {PAGENO} of {nbpg} · ' . html_escape($jobCard->jc_ref) . ' · Printed ' . date('Y-m-d H:i') . '</td></tr></table>';
         $mpdf->SetHTMLFooter($footerHtml);
 
         $html = '';
         $html .= '<style>
-            body{font-family:DejaVu Sans,sans-serif;font-size:10pt;color:#222;}
-            .block{margin-bottom:12px;}
-            .title{font-weight:bold;margin-bottom:6px;}
-            .info-table td{border:1px solid #d9d9d9;padding:6px;background:#f8f8f8;vertical-align:top;}
-            .chip{display:inline-block;padding:3px 8px;border-radius:10px;font-size:9pt;margin-right:4px;margin-bottom:4px;}
-            .chip.studio{background:#e8f4fd;color:#0c5460;}
-            .chip.stores{background:#fff3cd;color:#856404;}
-            .chip.field_team{background:#d1e7dd;color:#0f5132;}
-            .chip.warehouse{background:#f8d7da;color:#842029;}
+            body{font-family:DejaVu Sans,sans-serif;font-size:9pt;color:#1a1a1a;}
+            .block{margin-bottom:11px;}
+            .title{font-weight:bold;margin-bottom:5px;}
+            .hdr{border-bottom:1px solid #d9d9d9;padding-bottom:10px;margin-bottom:12px;}
+            .co-name{font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:0.04em;}
+            .co-meta{font-size:8pt;line-height:1.45;color:#333;}
+            .doc-title{font-size:22pt;font-weight:bold;text-align:right;}
+            .meta2{width:100%;border-collapse:collapse;margin-bottom:10px;}
+            .meta2 td{vertical-align:top;padding:4px 0;font-size:9pt;}
+            .lbl{color:#666;}
             .tbl{width:100%;border-collapse:collapse;}
-            .tbl th,.tbl td{border:1px solid #d9d9d9;padding:5px;}
-            .tbl th{background:#f3f3f3;}
-            .sec-head{background:#1f2d4d;color:#fff;font-weight:bold;padding:6px 8px;margin-top:8px;}
+            .tbl th,.tbl td{border:1px solid #d9d9d9;padding:5px 4px;font-size:8pt;}
+            .tbl th.hdb{background:#1a4a8c;color:#fff;font-weight:bold;border-color:#153d75;}
+            .tbl th.hg{background:#f0f2f5;font-weight:bold;}
+            .tbl tr:nth-child(even) td{background:#f4f6f8;}
+            .sec-head{background:#1a4a8c;color:#fff;font-weight:bold;padding:6px 8px;margin-top:10px;font-size:9pt;}
             .note-box{background:#f7f7f7;border:1px solid #d9d9d9;padding:8px;}
             .sig td{border:1px solid #d9d9d9;padding:8px;vertical-align:top;}
         </style>';
 
-        $html .= '<div class="block">';
-        $html .= '<table class="info-table" width="100%"><tr><td width="50%">';
-        $html .= '<strong>Client:</strong> ' . html_escape($clientName) . '<br>';
-        $html .= '<strong>Proposal Ref:</strong> ' . html_escape($jobCard->qt_ref) . '<br>';
-        $html .= '<strong>Job Type:</strong> ' . html_escape(str_replace(',', ', ', (string) $jobCard->job_type)) . '<br>';
-        $html .= '<strong>Deadline:</strong> <span style="color:' . ($isOverdue ? '#d9534f' : '#222') . ';">' . html_escape($deadline !== '' ? $deadline : '—') . '</span><br>';
-        $html .= '<strong>Assigned To:</strong> ' . html_escape($assignedTo) . '</td><td width="50%">';
-        $html .= '<strong>JC Reference:</strong> ' . html_escape($jobCard->jc_ref) . '<br>';
-        $html .= '<strong>Version:</strong> v' . $version . '<br>';
-        $html .= '<strong>Date Created:</strong> ' . html_escape(date('Y-m-d', strtotime((string) $jobCard->created_at))) . '<br>';
-        $html .= '<strong>Status:</strong> ' . html_escape($statusLabel) . '<br>';
-        $html .= '<strong>Approved Value:</strong> ' . html_escape(jc_format_mwk($jobCard->approved_total)) . '</td></tr></table>';
-        $html .= '</div>';
+        $html .= '<div class="hdr"><table width="100%"><tr><td width="72%" style="vertical-align:top;">'
+            . '<table><tr><td style="padding-right:10px;vertical-align:top;">' . $pdfLogo . '</td><td style="vertical-align:top;">'
+            . '<div class="co-name">' . html_escape(strtoupper((string) $displayCo)) . '</div>'
+            . '<div class="co-meta"><strong>' . html_escape((string) $displayCo) . '</strong></div></td></tr></table></td>'
+            . '<td width="28%" style="vertical-align:top;text-align:right;"><div class="doc-title">Job Card</div></td></tr></table></div>';
 
-        $html .= '<div class="block"><div class="title">Assigned Departments:</div>';
+        $html .= '<table class="meta2"><tr><td width="48%">'
+            . '<span class="lbl">Bill to</span><br/><strong>' . html_escape($clientName) . '</strong><br/>'
+            . ($billEmail !== '' ? html_escape($billEmail) : '<span style="color:#999;">[E-MAIL]</span>') . '<br/>'
+            . ($billPhone !== '' ? html_escape($billPhone) : '<span style="color:#999;">[PHONE]</span>') . '<br/>'
+            . ($billAddr !== '' ? nl2br(html_escape($billAddr)) : '<span style="color:#999;">[ADDRESS]</span>')
+            . '</td><td width="52%" style="text-align:right;">'
+            . '<span class="lbl">Job no.</span> <strong>' . html_escape($jobCard->jc_ref) . '</strong><br/>'
+            . '<span class="lbl">Order date</span> <strong>' . html_escape($jcPdfFmtDate($jobCard->start_date ?: $jobCard->created_at)) . '</strong><br/>'
+            . '<span class="lbl">Due</span> <strong style="color:' . ($isOverdue ? '#c00' : '#111') . ';">' . html_escape($jcPdfFmtDate($deadline)) . '</strong><br/>'
+            . '<span class="lbl">Status</span> ' . html_escape($statusLabel) . '<br/>'
+            . '<span class="lbl">Proposal ref</span> <strong>' . html_escape((string) $jobCard->qt_ref) . '</strong><br/>'
+            . '<span class="lbl">Approved value</span> <strong>' . html_escape(jc_format_mwk($jobCard->approved_total)) . '</strong><br/>'
+            . '<span class="lbl">Version</span> v' . (int) $version . ' &nbsp;|&nbsp; <span class="lbl">Assigned to</span> ' . html_escape($assignedTo)
+            . '</td></tr></table>';
+
+        $html .= '<div class="block"><div class="sec-head">Department routing &amp; acknowledgements</div>';
+        $html .= '<table class="tbl"><thead><tr><th class="hg">Department</th><th class="hg">Notified</th><th class="hg">Status</th></tr></thead><tbody>';
         foreach ((array) $jobCard->department_assignments as $assignment) {
             $dept = (string) ($assignment['department'] ?? '');
-            $ack = !empty($assignment['acknowledged_at'])
-                ? 'Acknowledged by ' . (($assignment['acknowledged_by_name'] ?? '') !== '' ? $assignment['acknowledged_by_name'] : ('Staff #' . (int) ($assignment['acknowledged_by'] ?? 0)))
-                : 'Pending acknowledgement';
-            $html .= '<span class="chip ' . html_escape($dept) . '">' . html_escape(jc_get_department_label($dept)) . '</span> <small>' . html_escape($ack) . '</small><br>';
+            $deptLabel = jc_get_department_label($dept);
+            $notified = !empty($assignment['notified_at']) ? html_escape(_dt($assignment['notified_at'])) : '—';
+            if ((int) ($assignment['completed'] ?? 0) === 1) {
+                $st = 'Completed';
+            } elseif (!empty($assignment['acknowledged_at'])) {
+                $st = 'Acknowledged by ' . html_escape((string) ($assignment['acknowledged_by_name'] ?? ('Staff #' . (int) ($assignment['acknowledged_by'] ?? 0)))) . ' at ' . html_escape(_dt($assignment['acknowledged_at']));
+            } else {
+                $st = 'Pending';
+            }
+            $html .= '<tr><td>' . html_escape($deptLabel) . '</td><td>' . $notified . '</td><td>' . $st . '</td></tr>';
         }
-        $html .= '</div>';
+        $html .= '</tbody></table></div>';
 
         $sectionNo = 1;
         foreach ($grouped as $tab => $tabLines) {
             $tabTitle = strtoupper(str_replace('_', ' ', (string) $tab));
             $html .= '<div class="sec-head">' . $sectionNo . '. ' . html_escape($tabTitle) . '</div>';
-            $html .= '<table class="tbl"><thead><tr><th width="6%">No</th><th width="44%">Description</th><th width="10%">Unit</th><th width="10%">Qty</th><th width="15%">Unit Price</th><th width="15%">Amount</th></tr></thead><tbody>';
+            $html .= '<table class="tbl"><thead><tr>'
+                . '<th class="hdb">Product Code</th><th class="hdb">Category</th><th class="hdb">Production Description</th>'
+                . '<th class="hdb">Qty</th><th class="hdb">UoM</th><th class="hdb">Notes</th><th class="hdb">Unit Price</th><th class="hdb">Amount</th>'
+                . '</tr></thead><tbody>';
             $i = 0;
             $subtotal = 0;
             foreach ($tabLines as $line) {
@@ -614,13 +642,21 @@ class Job_cards extends AdminController
                 $unitPrice = (float) ($line['sell_price'] ?? 0);
                 $amount = (float) ($line['line_total_sell'] ?? 0);
                 $subtotal += $amount;
+                $pcode = (string) ($line['item_code'] ?? $line['commodity_code'] ?? '');
+                $cat = (string) ($line['category'] ?? $line['commodity_group'] ?? '');
+                if ($cat === '') {
+                    $cat = ucwords(str_replace('_', ' ', (string) ($line['tab'] ?? $tab)));
+                }
+                $notes = (string) ($line['notes'] ?? $line['note'] ?? $line['remarks'] ?? $line['long_description'] ?? '');
                 $html .= '<tr>'
-                    . '<td>' . $i . '</td>'
+                    . '<td>' . ($pcode !== '' ? html_escape($pcode) : '—') . '</td>'
+                    . '<td>' . html_escape($cat) . '</td>'
                     . '<td>' . html_escape((string) ($line['description'] ?? '')) . '</td>'
-                    . '<td>' . html_escape((string) ($line['unit'] ?? '')) . '</td>'
                     . '<td>' . number_format($qty, 3, '.', ',') . '</td>'
-                    . '<td>' . number_format($unitPrice, 2, '.', ',') . '</td>'
-                    . '<td>' . number_format($amount, 2, '.', ',') . '</td>'
+                    . '<td>' . html_escape((string) ($line['unit'] ?? '')) . '</td>'
+                    . '<td>' . html_escape($notes) . '</td>'
+                    . '<td style="text-align:right;">' . number_format($unitPrice, 2, '.', ',') . '</td>'
+                    . '<td style="text-align:right;">' . number_format($amount, 2, '.', ',') . '</td>'
                     . '</tr>';
             }
             $html .= '</tbody></table>';
@@ -634,8 +670,8 @@ class Job_cards extends AdminController
 
             return $cid > 0 || $iid > 0;
         }));
-        $html .= '<div class="sec-head">MATERIALS TO BE ISSUED FROM STORES</div>';
-        $html .= '<table class="tbl"><thead><tr><th>Item Code</th><th>Description</th><th>Unit</th><th>Qty Required</th></tr></thead><tbody>';
+        $html .= '<div class="sec-head">Materials to be issued from stores</div>';
+        $html .= '<table class="tbl"><thead><tr><th class="hdb">Item Code</th><th class="hdb">Description</th><th class="hdb">Unit</th><th class="hdb">Qty Required</th></tr></thead><tbody>';
         if (empty($materials)) {
             $html .= '<tr><td colspan="4">No inventory-linked materials in this quotation.</td></tr>';
         } else {

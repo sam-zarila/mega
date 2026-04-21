@@ -29,88 +29,169 @@ $deptIcon = [
     'warehouse'  => 'fa fa-archive text-danger',
 ];
 
+$jcDocDate = static function ($d) {
+    if ($d === null || $d === '') {
+        return '—';
+    }
+    $t = strtotime((string) $d);
+
+    return $t ? date('m.d.Y', $t) : '—';
+};
+$jcDisplayCompany = get_option('invoice_company_name') ?: get_option('companyname');
+$jcModuleLogoRel  = 'modules/job_cards/assets/images/mega-logo.png';
+$jcModuleLogoAbs  = FCPATH . $jcModuleLogoRel;
+$jcHasModuleLogo  = is_file($jcModuleLogoAbs);
+$jcLogoFile      = (string) get_option('company_logo');
+$jcLogoPath      = FCPATH . 'uploads/company/' . $jcLogoFile;
+$jcHasCompanyLogo = $jcLogoFile !== '' && is_file($jcLogoPath);
+$jcCompanyLines = [];
+$jcVat          = (string) get_option('company_vat');
+if ($jcVat !== '') {
+    $jcCompanyLines[] = 'TPin: ' . $jcVat;
+}
+$jcAddrRaw = trim((string) get_option('invoice_company_address'));
+if ($jcAddrRaw !== '') {
+    $jcCompanyLines[] = preg_replace('/\s+/', ' ', str_replace(["\r\n", "\n", "\r"], ', ', $jcAddrRaw));
+}
+$jcPhone = trim((string) get_option('invoice_company_phonenumber'));
+if ($jcPhone !== '') {
+    $jcCompanyLines[] = $jcPhone;
+}
+$jcSmtp = trim((string) get_option('smtp_email'));
+if ($jcSmtp !== '' && stripos($jcSmtp, 'noreply') === false) {
+    $jcCompanyLines[] = 'Email: ' . $jcSmtp;
+}
+$jcWeb = trim((string) get_option('company_website'));
+if ($jcWeb === '') {
+    $jcWeb = site_url();
+}
+$jcCompanyLines[] = 'Web: ' . preg_replace('#^https?://#i', '', $jcWeb);
+$jcCityLine = trim(implode(', ', array_filter([
+    (string) get_option('invoice_company_city'),
+    (string) get_option('company_state'),
+])));
+if ($jcCityLine !== '') {
+    $jcCompanyLines[] = $jcCityLine;
+}
+$cl = $client ?? null;
+$billName  = $cl && isset($cl->company) ? (string) $cl->company : 'Unknown Client';
+$billEmail = $cl && !empty($cl->email) ? (string) $cl->email : '';
+$billPhone = $cl && !empty($cl->phonenumber) ? (string) $cl->phonenumber : '';
+$billAddr  = '';
+if ($cl) {
+    $billAddr = trim(implode("\n", array_filter([
+        (string) ($cl->address ?? ''),
+        trim(implode(', ', array_filter([(string) ($cl->city ?? ''), (string) ($cl->state ?? '')]))),
+        trim((string) ($cl->zip ?? '')),
+    ])));
+}
+
 init_head();
 ?>
-<div id="wrapper">
+<div id="wrapper" class="jc-job-card-view-wrap">
     <div class="content">
-        <div class="row">
-            <div class="col-md-12">
-                <h4 class="page-title">
+        <div class="row jc-view-toolbar">
+            <div class="col-md-8 col-sm-7">
+                <h4 class="page-title jc-view-toolbar-title">
                     <i class="fa fa-clipboard"></i>
-                    Job Card: <?php echo e($job_card->jc_ref); ?>
+                    <?php echo e($job_card->jc_ref); ?>
                     <?php echo jc_get_status_badge($job_card->status); ?>
-                    <small class="text-muted">Proposal:
+                    <small class="text-muted">
                         <?php if ((int) $job_card->proposal_id > 0) { ?>
-                            <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: '—'); ?></a>
+                            <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: 'Proposal'); ?></a>
                         <?php } else { ?>
-                            <span class="text-warning">Not linked</span>
+                            <span class="text-warning">Proposal not linked</span>
                         <?php } ?>
                     </small>
                 </h4>
-                <div class="pull-right mtop5 mbot10">
-                    <a href="<?php echo admin_url('job_cards/pdf/' . $job_card->id); ?>" class="btn btn-default btn-sm" target="_blank">
-                        <i class="fa fa-file-pdf-o"></i> Print Job Card
+            </div>
+            <div class="col-md-4 col-sm-5 text-right jc-view-toolbar-actions">
+                <a href="<?php echo admin_url('job_cards/pdf/' . $job_card->id); ?>" class="btn btn-default btn-sm" target="_blank">
+                    <i class="fa fa-file-pdf-o"></i> Print Job Card
+                </a>
+                <?php if (staff_can('admin', 'job_cards')) { ?>
+                    <a href="<?php echo admin_url('job_cards/create_material_issue/' . $job_card->id); ?>"
+                       class="btn btn-warning btn-sm <?php echo (int) $job_card->materials_issued === 1 ? 'disabled' : ''; ?>">
+                        <i class="fa fa-cubes"></i>
+                        <?php echo (int) $job_card->materials_issued === 1 ? 'Materials Issued' : 'Issue Materials'; ?>
                     </a>
-                    <?php if (staff_can('admin', 'job_cards')) { ?>
-                        <a href="<?php echo admin_url('job_cards/create_material_issue/' . $job_card->id); ?>"
-                           class="btn btn-warning btn-sm <?php echo (int) $job_card->materials_issued === 1 ? 'disabled' : ''; ?>">
-                            <i class="fa fa-cubes"></i>
-                            <?php echo (int) $job_card->materials_issued === 1 ? 'Materials Issued' : 'Issue Materials'; ?>
-                        </a>
-                    <?php } ?>
-                </div>
+                <?php } ?>
             </div>
         </div>
 
         <div class="row">
             <div class="col-md-8">
-                <div class="panel_s">
-                    <div class="panel-heading" style="background:#1f2d4d;color:#fff;">
-                        <strong><?php echo e($job_card->jc_ref); ?></strong>
-                        <span class="pull-right"><?php echo jc_get_status_badge($job_card->status); ?></span>
-                    </div>
-                    <div class="panel-body">
-                        <div class="row">
-                            <div class="col-md-6"><p><strong>Client:</strong> <a href="<?php echo admin_url('clients/client/' . (int) $job_card->client_id); ?>"><?php echo e($client->company ?? 'Unknown Client'); ?></a></p></div>
-                            <div class="col-md-6"><p><strong>Proposal Ref:</strong>
-                                <?php if ((int) $job_card->proposal_id > 0) { ?>
-                                    <a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: '—'); ?></a>
-                                <?php } else { ?>
-                                    <span class="text-muted">Not linked — create this job card from a proposal, or set <code>jc_id</code> on the proposal.</span>
-                                <?php } ?>
-                            </p></div>
-                            <div class="col-md-6">
-                                <p><strong>Created By:</strong>
-                                    <?php echo e($job_card->created_by_name ?: 'System'); ?>
-                                    <?php if ((int) $job_card->created_by === 0) { ?><span class="label label-default">Auto</span><?php } ?>
-                                </p>
-                            </div>
-                            <div class="col-md-6"><p><strong>Salesperson:</strong> <?php echo e($job_card->assigned_sales_name ?: '—'); ?></p></div>
-                            <div class="col-md-6"><p><strong>Start Date:</strong> <?php echo e($job_card->start_date ?: '—'); ?></p></div>
-                            <div class="col-md-6">
-                                <p><strong>Deadline:</strong>
-                                    <span class="<?php echo $isOverdue ? 'text-danger bold' : ''; ?>">
-                                        <?php echo e($job_card->deadline ?: '—'); ?>
-                                        <?php if ($isOverdue) { ?><span class="label label-danger">Overdue</span><?php } ?>
-                                    </span>
-                                </p>
-                            </div>
-                            <div class="col-md-6">
-                                <p><strong>Job Types:</strong>
-                                    <?php foreach (array_filter(array_map('trim', explode(',', (string) $job_card->job_type))) as $jt) { ?>
-                                        <span class="label label-info"><?php echo e(ucwords(str_replace('_', ' ', $jt))); ?></span>
+                <div class="jc-doc-sheet">
+                    <header class="jc-doc-header">
+                        <div class="jc-doc-header-brand">
+                            <?php if ($jcHasModuleLogo) { ?>
+                                <img src="<?php echo base_url($jcModuleLogoRel); ?>" alt="MEGA Signs &amp; Media Ltd" class="jc-doc-logo-img" />
+                            <?php } elseif ($jcHasCompanyLogo) { ?>
+                                <img src="<?php echo base_url('uploads/company/' . $jcLogoFile); ?>" alt="" class="jc-doc-logo-img" />
+                            <?php } else { ?>
+                                <div class="jc-doc-logo-mark" aria-hidden="true">
+                                    <svg viewBox="0 0 56 52" xmlns="http://www.w3.org/2000/svg" class="jc-doc-logo-svg">
+                                        <path fill="#6BB3E8" d="M6 46 L6 10 L22 10 L14 46 Z"/>
+                                        <path fill="#4B2869" d="M18 10 L34 10 L46 46 L28 46 Z"/>
+                                    </svg>
+                                </div>
+                            <?php } ?>
+                            <div class="jc-doc-company-block">
+                                <div class="jc-doc-company-name"><?php echo e(strtoupper($jcDisplayCompany)); ?></div>
+                                <div class="jc-doc-company-meta">
+                                    <strong><?php echo e($jcDisplayCompany); ?></strong>
+                                    <?php foreach ($jcCompanyLines as $ln) { ?>
+                                        <span class="jc-doc-company-line"><?php echo e($ln); ?></span>
                                     <?php } ?>
-                                </p>
+                                </div>
                             </div>
-                            <div class="col-md-6"><p><strong>Approved Value:</strong> <span class="h4 mleft5"><?php echo e(jc_format_mwk($job_card->approved_total)); ?></span></p></div>
+                        </div>
+                        <div class="jc-doc-header-title">
+                            <span class="jc-doc-title-text">Job Card</span>
+                        </div>
+                    </header>
+
+                    <div class="jc-doc-meta row">
+                        <div class="col-sm-6 jc-bill-to">
+                            <div class="jc-bill-to-label">Bill to</div>
+                            <div class="jc-bill-to-body">
+                                <div class="jc-bill-to-line jc-bill-to-name"><a href="<?php echo admin_url('clients/client/' . (int) $job_card->client_id); ?>"><?php echo e($billName); ?></a></div>
+                                <div class="jc-bill-to-line"><?php echo $billEmail !== '' ? e($billEmail) : '<span class="jc-bill-placeholder">[E-MAIL]</span>'; ?></div>
+                                <div class="jc-bill-to-line"><?php echo $billPhone !== '' ? e($billPhone) : '<span class="jc-bill-placeholder">[PHONE]</span>'; ?></div>
+                                <div class="jc-bill-to-line jc-bill-to-addr"><?php echo $billAddr !== '' ? nl2br(e($billAddr)) : '<span class="jc-bill-placeholder">[ADDRESS]</span>'; ?></div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 jc-order-block">
+                            <div class="jc-order-line"><span class="jc-order-label">Job no.</span> <strong><?php echo e($job_card->jc_ref); ?></strong></div>
+                            <div class="jc-order-line"><span class="jc-order-label">Order date</span> <strong><?php echo e($jcDocDate($job_card->start_date ?: $job_card->created_at)); ?></strong></div>
+                            <div class="jc-order-line"><span class="jc-order-label">Due</span> <strong class="<?php echo $isOverdue ? 'text-danger' : ''; ?>"><?php echo e($jcDocDate($job_card->deadline)); ?><?php if ($isOverdue) { ?> <span class="label label-danger">Overdue</span><?php } ?></strong></div>
+                            <div class="jc-order-line"><span class="jc-order-label">Status</span> <?php echo jc_get_status_badge($job_card->status); ?></div>
+                            <div class="jc-order-line"><span class="jc-order-label">Proposal ref</span>
+                                <?php if ((int) $job_card->proposal_id > 0) { ?>
+                                    <strong><a href="<?php echo admin_url('proposals/list_proposals/' . (int) $job_card->proposal_id); ?>"><?php echo e($job_card->qt_ref ?: '—'); ?></a></strong>
+                                <?php } else { ?>
+                                    <span class="text-muted">Not linked — set <code>jc_id</code> on the proposal or recreate from a proposal.</span>
+                                <?php } ?>
+                            </div>
+                            <div class="jc-order-line"><span class="jc-order-label">Approved value</span> <strong><?php echo e(jc_format_mwk($job_card->approved_total)); ?></strong></div>
                         </div>
                     </div>
-                </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Department Routing &amp; Acknowledgements</strong></div>
-                    <div class="panel-body">
-                        <table class="table table-bordered">
+                    <div class="jc-doc-extra-meta row">
+                        <div class="col-sm-4"><span class="jc-order-label">Created by</span> <?php echo e($job_card->created_by_name ?: 'System'); ?><?php if ((int) $job_card->created_by === 0) { ?> <span class="label label-default">Auto</span><?php } ?></div>
+                        <div class="col-sm-4"><span class="jc-order-label">Salesperson</span> <?php echo e($job_card->assigned_sales_name ?: '—'); ?></div>
+                        <div class="col-sm-4"><span class="jc-order-label">Job types</span>
+                            <?php foreach (array_filter(array_map('trim', explode(',', (string) $job_card->job_type))) as $jt) { ?>
+                                <span class="label label-info"><?php echo e(ucwords(str_replace('_', ' ', $jt))); ?></span>
+                            <?php } ?>
+                            <?php if (trim((string) $job_card->job_type) === '') { ?><span class="text-muted">—</span><?php } ?>
+                        </div>
+                    </div>
+
+                <div class="jc-doc-section">
+                    <div class="jc-doc-section-hd"><strong>Department Routing &amp; Acknowledgements</strong></div>
+                    <div class="jc-doc-section-bd">
+                        <table class="table jc-doc-table">
                             <thead><tr><th>Department</th><th>Notified</th><th>Status</th><th></th></tr></thead>
                             <tbody>
                             <?php foreach ((array) $job_card->department_assignments as $da) {
@@ -147,13 +228,13 @@ init_head();
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Approved Scope of Work</strong></div>
-                    <div class="panel-body">
-                        <div class="panel-group" id="jc-scope-accordion">
+                <div class="jc-doc-section">
+                    <div class="jc-doc-section-hd"><strong>Approved Scope of Work</strong></div>
+                    <div class="jc-doc-section-bd">
+                        <div class="panel-group jc-scope-accordion" id="jc-scope-accordion">
                             <?php $tabIndex = 0; foreach ($tabs as $tabKey => $tabData) { $tabIndex++; ?>
-                                <div class="panel panel-default">
-                                    <div class="panel-heading">
+                                <div class="panel panel-default jc-scope-panel">
+                                    <div class="panel-heading jc-scope-panel-hd">
                                         <h4 class="panel-title">
                                             <a data-toggle="collapse" data-parent="#jc-scope-accordion" href="#scope-<?php echo (int) $tabIndex; ?>">
                                                 <?php echo e(ucwords(str_replace('_', ' ', $tabKey))); ?> — <?php echo e(jc_format_mwk($tabData['subtotal'])); ?>
@@ -161,21 +242,47 @@ init_head();
                                         </h4>
                                     </div>
                                     <div id="scope-<?php echo (int) $tabIndex; ?>" class="panel-collapse collapse <?php echo $tabIndex === 1 ? 'in' : ''; ?>">
-                                        <div class="panel-body">
-                                            <table class="table table-bordered table-condensed">
-                                                <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Sell Price</th><th>Line Total</th></tr></thead>
+                                        <div class="panel-body jc-scope-panel-bd">
+                                            <div class="table-responsive">
+                                            <table class="table jc-prod-table">
+                                                <thead>
+                                                <tr>
+                                                    <th class="jc-col-code">Product Code</th>
+                                                    <th class="jc-col-cat">Category</th>
+                                                    <th class="jc-col-desc">Production Description</th>
+                                                    <th class="jc-col-qty">Quantity</th>
+                                                    <th class="jc-col-uom">UoM</th>
+                                                    <th class="jc-col-notes">Notes</th>
+                                                    <th class="jc-col-price">Unit Price</th>
+                                                    <th class="jc-col-total">Line Total</th>
+                                                </tr>
+                                                </thead>
                                                 <tbody>
-                                                <?php foreach ($tabData['lines'] as $line) { ?>
-                                                    <tr>
+                                                <?php
+                                                $rowNum = 0;
+                                                foreach ($tabData['lines'] as $line) {
+                                                    $rowNum++;
+                                                    $pcode = (string) ($line['item_code'] ?? $line['commodity_code'] ?? '');
+                                                    $cat = (string) ($line['category'] ?? $line['commodity_group'] ?? '');
+                                                    if ($cat === '') {
+                                                        $cat = ucwords(str_replace('_', ' ', (string) ($line['tab'] ?? $tabKey)));
+                                                    }
+                                                    $notes = (string) ($line['notes'] ?? $line['note'] ?? $line['remarks'] ?? $line['long_description'] ?? '');
+                                                    ?>
+                                                    <tr class="<?php echo $rowNum % 2 === 0 ? 'jc-row-alt' : ''; ?>">
+                                                        <td><?php echo $pcode !== '' ? e($pcode) : '—'; ?></td>
+                                                        <td><?php echo e($cat); ?></td>
                                                         <td><?php echo e($line['description'] ?? ''); ?></td>
                                                         <td><?php echo e($line['quantity'] ?? ''); ?></td>
                                                         <td><?php echo e($line['unit'] ?? ''); ?></td>
+                                                        <td><?php echo e($notes); ?></td>
                                                         <td><?php echo e(jc_format_mwk($line['sell_price'] ?? 0)); ?></td>
                                                         <td><?php echo e(jc_format_mwk($line['line_total_sell'] ?? 0)); ?></td>
                                                     </tr>
                                                 <?php } ?>
                                                 </tbody>
                                             </table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -190,17 +297,17 @@ init_head();
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Material Issues</strong> <span class="badge"><?php echo count((array) $job_card->material_issues); ?></span></div>
-                    <div class="panel-body">
+                <div class="jc-doc-section">
+                    <div class="jc-doc-section-hd"><strong>Material Issues</strong> <span class="badge"><?php echo count((array) $job_card->material_issues); ?></span></div>
+                    <div class="jc-doc-section-bd">
                         <?php if (empty($job_card->material_issues)) { ?>
                             <p class="text-muted">No materials issued yet.</p>
                         <?php } else { ?>
-                            <table class="table table-striped table-bordered">
+                            <table class="table jc-doc-table jc-doc-table-striped">
                                 <thead><tr><th>Issue Ref</th><th>Date</th><th>Issued By</th><th>Warehouse</th><th>Items</th><th>Total Cost</th><th>Status</th></tr></thead>
                                 <tbody>
-                                    <?php foreach ((array) $job_card->material_issues as $issue) { ?>
-                                        <tr>
+                                    <?php $mi = 0; foreach ((array) $job_card->material_issues as $issue) { $mi++; ?>
+                                        <tr class="<?php echo $mi % 2 === 0 ? 'jc-row-alt' : ''; ?>">
                                             <td><a href="<?php echo admin_url('job_cards/get_material_issue/' . (int) $issue['id']); ?>" target="_blank"><?php echo e($issue['issue_ref']); ?></a></td>
                                             <td><?php echo !empty($issue['issued_at']) ? e(_dt($issue['issued_at'])) : '—'; ?></td>
                                             <td><?php echo (int) $issue['issued_by'] > 0 ? e(get_staff_full_name((int) $issue['issued_by'])) : '—'; ?></td>
@@ -214,16 +321,16 @@ init_head();
                             </table>
                         <?php } ?>
                         <?php if ((int) $job_card->materials_issued === 0 && $canIssue) { ?>
-                            <a href="<?php echo admin_url('job_cards/create_material_issue/' . $job_card->id); ?>" class="btn btn-warning">
+                            <a href="<?php echo admin_url('job_cards/create_material_issue/' . $job_card->id); ?>" class="btn btn-warning mtop10">
                                 <i class="fa fa-cubes"></i> Issue Materials
                             </a>
                         <?php } ?>
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Production Notes</strong></div>
-                    <div class="panel-body">
+                <div class="jc-doc-section">
+                    <div class="jc-doc-section-hd"><strong>Production Notes</strong></div>
+                    <div class="jc-doc-section-bd">
                         <div class="qt-notes-section">
                             <textarea id="production_notes" name="production_notes" class="form-control" rows="4" placeholder="Add production progress notes..."><?php echo e($job_card->production_notes); ?></textarea>
                             <?php if ($canEditProd) { ?>
@@ -233,9 +340,9 @@ init_head();
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Quality Check Notes</strong></div>
-                    <div class="panel-body">
+                <div class="jc-doc-section">
+                    <div class="jc-doc-section-hd"><strong>Quality Check Notes</strong></div>
+                    <div class="jc-doc-section-bd">
                         <div class="qt-notes-section">
                             <textarea id="quality_notes" name="quality_notes" class="form-control" rows="4" placeholder="Add quality check notes..."><?php echo e($job_card->quality_notes); ?></textarea>
                             <?php if ($canEditQc) { ?>
@@ -244,12 +351,16 @@ init_head();
                         </div>
                     </div>
                 </div>
+
+                    <p class="jc-doc-terms">Terms and conditions apply</p>
+                </div>
             </div>
 
             <div class="col-md-4">
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Status Pipeline</strong></div>
-                    <div class="panel-body">
+                <div class="jc-doc-sidebar">
+                <div class="jc-doc-section jc-doc-section-sidebar">
+                    <div class="jc-doc-section-hd"><strong>Status Pipeline</strong></div>
+                    <div class="jc-doc-section-bd">
                         <ul class="jc-pipeline">
                             <?php for ($s = 1; $s <= 7; $s++) {
                                 $label = jc_get_status_label($s);
@@ -284,9 +395,9 @@ init_head();
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Activity Timeline</strong></div>
-                    <div class="panel-body">
+                <div class="jc-doc-section jc-doc-section-sidebar">
+                    <div class="jc-doc-section-hd"><strong>Activity Timeline</strong></div>
+                    <div class="jc-doc-section-bd">
                         <div class="jc-timeline">
                             <?php $events = array_reverse((array) $job_card->status_log); foreach ($events as $event) {
                                 $to = (int) $event['to_status'];
@@ -305,9 +416,9 @@ init_head();
                     </div>
                 </div>
 
-                <div class="panel_s">
-                    <div class="panel-heading"><strong>Quick Info</strong></div>
-                    <div class="panel-body">
+                <div class="jc-doc-section jc-doc-section-sidebar">
+                    <div class="jc-doc-section-hd"><strong>Quick Info</strong></div>
+                    <div class="jc-doc-section-bd">
                         <p><strong>Materials Status:</strong><br />
                             <?php if ((int) $job_card->materials_issued === 1) { ?>
                                 <span class="text-success"><i class="fa fa-check-circle"></i> Issued by <?php echo (int) $job_card->materials_issued_by > 0 ? e(get_staff_full_name((int) $job_card->materials_issued_by)) : '—'; ?> on <?php echo !empty($job_card->materials_issued_at) ? e(_dt($job_card->materials_issued_at)) : '—'; ?></span>
@@ -331,6 +442,7 @@ init_head();
                             <?php echo !empty($job_card->completed_at) ? e(_dt($job_card->completed_at)) : 'In progress'; ?>
                         </p>
                     </div>
+                </div>
                 </div>
             </div>
         </div>
